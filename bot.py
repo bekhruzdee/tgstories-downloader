@@ -370,6 +370,191 @@ async def broadcast_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     asyncio.create_task(_do_broadcast(context.bot, text, user_ids, progress))
     return CHOOSING
 
+# ── admin panel ───────────────────────────────────────────────────────────────
+
+def _admin_kbd() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("📊 Statistika",       callback_data="adm_stats"),
+            InlineKeyboardButton("👥 Foydalanuvchilar", callback_data="adm_users_0"),
+        ],
+        [
+            InlineKeyboardButton("⬇️ Yuklamalar", callback_data="adm_dl_0"),
+            InlineKeyboardButton("🔔 Obunalar",   callback_data="adm_subs"),
+        ],
+        [InlineKeyboardButton("📢 Broadcast", callback_data="adm_broadcast")],
+    ])
+
+
+async def admin_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if update.effective_user.id != ADMIN_ID:
+        return
+    context.user_data.pop("awaiting_broadcast", None)
+    if update.callback_query:
+        await update.callback_query.answer()
+        await update.callback_query.edit_message_text("🔐 Admin panel:", reply_markup=_admin_kbd())
+    else:
+        await update.message.reply_text("🔐 Admin panel:", reply_markup=_admin_kbd())
+
+
+async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if update.effective_user.id != ADMIN_ID:
+        return
+    await update.callback_query.answer()
+    s = await database.get_stats_extended()
+    text = (
+        f"📊 <b>Statistika</b>\n\n"
+        f"👥 <b>Foydalanuvchilar:</b>\n"
+        f"  Jami: {s['total_users']}\n"
+        f"  Bugun: {s['today_users']}\n"
+        f"  Hafta: {s['week_users']}\n"
+        f"  Oy: {s['month_users']}\n\n"
+        f"⬇️ <b>Yuklamalar:</b>\n"
+        f"  Jami: {s['total_downloads']}\n"
+        f"  Bugun: {s['today_downloads']}\n"
+        f"  Username: {s['username_downloads']}\n"
+        f"  URL: {s['url_downloads']}\n\n"
+        f"🔔 <b>Obunalar:</b> {s['total_subscriptions']}"
+    )
+    kb = InlineKeyboardMarkup([[
+        InlineKeyboardButton("🔄 Yangilash", callback_data="adm_stats"),
+        InlineKeyboardButton("◀️ Orqaga",    callback_data="adm_menu"),
+    ]])
+    await update.callback_query.edit_message_text(text, reply_markup=kb, parse_mode="HTML")
+
+
+async def admin_users(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if update.effective_user.id != ADMIN_ID:
+        return
+    await update.callback_query.answer()
+    page = int(update.callback_query.data.split("_")[-1])
+    per_page = 10
+    users = await database.get_users_page(page, per_page)
+    total = await database.get_users_count()
+    total_pages = max(1, (total + per_page - 1) // per_page)
+
+    lines = []
+    for i, u in enumerate(users, page * per_page + 1):
+        uname = f"@{u['username']}" if u["username"] else "—"
+        lines.append(
+            f"{i}. {u['full_name']} ({uname}) | ID: {u['user_id']} | "
+            f"{u['lang']} | Yuklamalar: {u['download_count']}"
+        )
+    text = f"👥 <b>Foydalanuvchilar</b> ({total} ta)\n\n" + ("\n".join(lines) or "Bo'sh")
+
+    nav = []
+    if page > 0:
+        nav.append(InlineKeyboardButton("◀️ Prev", callback_data=f"adm_users_{page - 1}"))
+    nav.append(InlineKeyboardButton(f"{page + 1}/{total_pages}", callback_data="adm_noop"))
+    if (page + 1) * per_page < total:
+        nav.append(InlineKeyboardButton("Next ▶️", callback_data=f"adm_users_{page + 1}"))
+    kb = InlineKeyboardMarkup([nav, [InlineKeyboardButton("◀️ Orqaga", callback_data="adm_menu")]])
+    await update.callback_query.edit_message_text(text, reply_markup=kb, parse_mode="HTML")
+
+
+async def admin_downloads(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if update.effective_user.id != ADMIN_ID:
+        return
+    await update.callback_query.answer()
+    page = int(update.callback_query.data.split("_")[-1])
+    per_page = 20
+    downloads = await database.get_recent_downloads(page, per_page)
+    total = await database.get_downloads_count()
+    total_pages = max(1, (total + per_page - 1) // per_page)
+
+    lines = []
+    for i, d in enumerate(downloads, page * per_page + 1):
+        name = d["full_name"] or "—"
+        lines.append(
+            f"{i}. {name} → @{d['target']} | {d['type']} | {str(d['downloaded_at'])[:16]}"
+        )
+    text = f"⬇️ <b>Yuklamalar</b> ({total} ta)\n\n" + ("\n".join(lines) or "Bo'sh")
+
+    nav = []
+    if page > 0:
+        nav.append(InlineKeyboardButton("◀️ Prev", callback_data=f"adm_dl_{page - 1}"))
+    nav.append(InlineKeyboardButton(f"{page + 1}/{total_pages}", callback_data="adm_noop"))
+    if (page + 1) * per_page < total:
+        nav.append(InlineKeyboardButton("Next ▶️", callback_data=f"adm_dl_{page + 1}"))
+    kb = InlineKeyboardMarkup([nav, [InlineKeyboardButton("◀️ Orqaga", callback_data="adm_menu")]])
+    await update.callback_query.edit_message_text(text, reply_markup=kb, parse_mode="HTML")
+
+
+async def admin_subs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if update.effective_user.id != ADMIN_ID:
+        return
+    await update.callback_query.answer()
+    subs = await database.get_all_subscriptions_detailed()
+
+    lines = []
+    for i, s in enumerate(subs, 1):
+        name = s["full_name"] or "—"
+        lines.append(f"{i}. {name} → @{s['target_username']} | {str(s['added_at'])[:10]}")
+    text = f"🔔 <b>Obunalar</b> ({len(subs)} ta)\n\n" + ("\n".join(lines) or "Bo'sh")
+
+    kb = InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Orqaga", callback_data="adm_menu")]])
+    await update.callback_query.edit_message_text(text, reply_markup=kb, parse_mode="HTML")
+
+
+async def admin_broadcast_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if update.effective_user.id != ADMIN_ID:
+        return
+    await update.callback_query.answer()
+    total = await database.get_users_count()
+    kb = InlineKeyboardMarkup([
+        [InlineKeyboardButton("✍️ Xabar yozish", callback_data="adm_bcast_write")],
+        [InlineKeyboardButton("◀️ Orqaga",        callback_data="adm_menu")],
+    ])
+    await update.callback_query.edit_message_text(
+        f"📢 <b>Broadcast</b>\n\nFoydalanuvchilar soni: {total}",
+        reply_markup=kb,
+        parse_mode="HTML",
+    )
+
+
+async def admin_broadcast_write(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if update.effective_user.id != ADMIN_ID:
+        return
+    await update.callback_query.answer()
+    context.user_data["awaiting_broadcast"] = True
+    await update.callback_query.edit_message_text(
+        "✍️ Broadcast xabarini yuboring (matn yoki forward):\n\n/admin — bekor qilish"
+    )
+
+
+async def handle_admin_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not context.user_data.get("awaiting_broadcast"):
+        return
+    context.user_data.pop("awaiting_broadcast", None)
+
+    user_ids = await database.get_all_user_ids()
+    sent, failed = 0, 0
+    progress = await update.message.reply_text(f"📤 0/{len(user_ids)} yuborilmoqda...")
+
+    for i, uid in enumerate(user_ids, 1):
+        try:
+            await update.message.copy_to(uid)
+            sent += 1
+        except RetryAfter as e:
+            await asyncio.sleep(e.retry_after + 1)
+            try:
+                await update.message.copy_to(uid)
+                sent += 1
+            except Exception:
+                failed += 1
+        except Exception:
+            failed += 1
+
+        if i % 10 == 0:
+            try:
+                await progress.edit_text(f"📤 {i}/{len(user_ids)} yuborilmoqda...")
+            except Exception:
+                pass
+
+        await asyncio.sleep(0.05)
+
+    await progress.edit_text(f"✅ Yuborildi: {sent} | ❌ Xato: {failed}")
+
 # ── lifecycle ─────────────────────────────────────────────────────────────────
 
 async def post_init(application: Application) -> None:
@@ -439,6 +624,21 @@ def main() -> None:
         .build()
     )
     application.add_handler(conv)
+
+    # admin panel — registered outside ConversationHandler
+    application.add_handler(CommandHandler("admin", admin_cmd))
+    application.add_handler(CallbackQueryHandler(admin_cmd,            pattern="^adm_menu$"))
+    application.add_handler(CallbackQueryHandler(admin_stats,          pattern="^adm_stats$"))
+    application.add_handler(CallbackQueryHandler(admin_users,          pattern=r"^adm_users_\d+$"))
+    application.add_handler(CallbackQueryHandler(admin_downloads,      pattern=r"^adm_dl_\d+$"))
+    application.add_handler(CallbackQueryHandler(admin_subs,           pattern="^adm_subs$"))
+    application.add_handler(CallbackQueryHandler(admin_broadcast_menu, pattern="^adm_broadcast$"))
+    application.add_handler(CallbackQueryHandler(admin_broadcast_write, pattern="^adm_bcast_write$"))
+    application.add_handler(CallbackQueryHandler(lambda u, c: u.callback_query.answer(), pattern="^adm_noop$"))
+    application.add_handler(
+        MessageHandler(filters.ALL & filters.User(ADMIN_ID), handle_admin_broadcast),
+        group=1,
+    )
 
     print("Bot ishga tushdi!")
     application.run_polling()

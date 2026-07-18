@@ -1,7 +1,7 @@
 import aiosqlite
 import json
 import os
-from datetime import date
+from datetime import date, timedelta
 
 DB_PATH = "data/users.db"
 
@@ -178,3 +178,118 @@ async def update_subscription_ids(
             (json.dumps(story_ids), user_id, target_username.lower()),
         )
         await db.commit()
+
+
+async def get_stats_extended() -> dict:
+    today = date.today().isoformat()
+    week_ago = (date.today() - timedelta(days=7)).isoformat()
+    month_ago = (date.today() - timedelta(days=30)).isoformat()
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute("SELECT COUNT(*) FROM users") as c:
+            total_users = (await c.fetchone())[0]
+        async with db.execute(
+            "SELECT COUNT(*) FROM users WHERE DATE(joined_at) = ?", (today,)
+        ) as c:
+            today_users = (await c.fetchone())[0]
+        async with db.execute(
+            "SELECT COUNT(*) FROM users WHERE DATE(joined_at) >= ?", (week_ago,)
+        ) as c:
+            week_users = (await c.fetchone())[0]
+        async with db.execute(
+            "SELECT COUNT(*) FROM users WHERE DATE(joined_at) >= ?", (month_ago,)
+        ) as c:
+            month_users = (await c.fetchone())[0]
+        async with db.execute("SELECT COUNT(*) FROM downloads") as c:
+            total_downloads = (await c.fetchone())[0]
+        async with db.execute(
+            "SELECT COUNT(*) FROM downloads WHERE DATE(downloaded_at) = ?", (today,)
+        ) as c:
+            today_downloads = (await c.fetchone())[0]
+        async with db.execute(
+            "SELECT COUNT(*) FROM downloads WHERE type = 'username'"
+        ) as c:
+            username_downloads = (await c.fetchone())[0]
+        async with db.execute(
+            "SELECT COUNT(*) FROM downloads WHERE type = 'url'"
+        ) as c:
+            url_downloads = (await c.fetchone())[0]
+        async with db.execute("SELECT COUNT(*) FROM subscriptions") as c:
+            total_subscriptions = (await c.fetchone())[0]
+    return {
+        "total_users": total_users,
+        "today_users": today_users,
+        "week_users": week_users,
+        "month_users": month_users,
+        "total_downloads": total_downloads,
+        "today_downloads": today_downloads,
+        "username_downloads": username_downloads,
+        "url_downloads": url_downloads,
+        "total_subscriptions": total_subscriptions,
+    }
+
+
+async def get_users_page(page: int, per_page: int = 10) -> list[dict]:
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT u.user_id, u.username, u.full_name, u.lang, u.joined_at, "
+            "COUNT(d.id) as download_count "
+            "FROM users u LEFT JOIN downloads d ON u.user_id = d.user_id "
+            "GROUP BY u.user_id ORDER BY u.joined_at DESC "
+            "LIMIT ? OFFSET ?",
+            (per_page, page * per_page),
+        ) as cur:
+            return [
+                {
+                    "user_id": r[0], "username": r[1], "full_name": r[2],
+                    "lang": r[3], "joined_at": r[4], "download_count": r[5],
+                }
+                for r in await cur.fetchall()
+            ]
+
+
+async def get_users_count() -> int:
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute("SELECT COUNT(*) FROM users") as c:
+            return (await c.fetchone())[0]
+
+
+async def get_recent_downloads(page: int, per_page: int = 20) -> list[dict]:
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT d.user_id, d.target, d.type, d.downloaded_at, "
+            "u.full_name, u.username as uname "
+            "FROM downloads d LEFT JOIN users u ON d.user_id = u.user_id "
+            "ORDER BY d.downloaded_at DESC "
+            "LIMIT ? OFFSET ?",
+            (per_page, page * per_page),
+        ) as cur:
+            return [
+                {
+                    "user_id": r[0], "target": r[1], "type": r[2],
+                    "downloaded_at": r[3], "full_name": r[4], "uname": r[5],
+                }
+                for r in await cur.fetchall()
+            ]
+
+
+async def get_downloads_count() -> int:
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute("SELECT COUNT(*) FROM downloads") as c:
+            return (await c.fetchone())[0]
+
+
+async def get_all_subscriptions_detailed() -> list[dict]:
+    async with aiosqlite.connect(DB_PATH) as db:
+        async with db.execute(
+            "SELECT s.user_id, s.target_username, s.added_at, "
+            "u.full_name, u.username as uname "
+            "FROM subscriptions s LEFT JOIN users u ON s.user_id = u.user_id "
+            "ORDER BY s.added_at DESC"
+        ) as cur:
+            return [
+                {
+                    "user_id": r[0], "target_username": r[1], "added_at": r[2],
+                    "full_name": r[3], "uname": r[4],
+                }
+                for r in await cur.fetchall()
+            ]
