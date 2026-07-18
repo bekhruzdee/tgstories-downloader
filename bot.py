@@ -39,14 +39,7 @@ def main_keyboard(user_id: int, lang: str) -> InlineKeyboardMarkup:
         ],
     ]
     if user_id == ADMIN_ID:
-        rows.append([
-            InlineKeyboardButton("📊 Statistika",       callback_data="adm_stats"),
-            InlineKeyboardButton("👥 Foydalanuvchilar", callback_data="adm_users_0"),
-        ])
-        rows.append([
-            InlineKeyboardButton("⬇️ Yuklamalar", callback_data="adm_dl_0"),
-            InlineKeyboardButton("📢 Broadcast",  callback_data="adm_broadcast"),
-        ])
+        rows.append([InlineKeyboardButton("🔐 Admin panel", callback_data="adm_panel")])
     return InlineKeyboardMarkup(rows)
 
 
@@ -385,6 +378,25 @@ async def broadcast_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
 
 # ── admin panel ───────────────────────────────────────────────────────────────
 
+async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if update.effective_user.id != ADMIN_ID:
+        return
+    await update.callback_query.answer()
+    kb = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("📊 Statistika",       callback_data="adm_stats"),
+            InlineKeyboardButton("👥 Foydalanuvchilar", callback_data="adm_users_0"),
+        ],
+        [
+            InlineKeyboardButton("⬇️ Yuklamalar", callback_data="adm_dl_0"),
+            InlineKeyboardButton("🔔 Obunalar",   callback_data="adm_subs"),
+        ],
+        [InlineKeyboardButton("📢 Broadcast", callback_data="adm_broadcast")],
+        [InlineKeyboardButton("◀️ Orqaga",    callback_data="adm_menu")],
+    ])
+    await update.callback_query.edit_message_text("🔐 Admin panel:", reply_markup=kb)
+
+
 async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if update.effective_user.id != ADMIN_ID:
         return
@@ -406,7 +418,7 @@ async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     )
     kb = InlineKeyboardMarkup([[
         InlineKeyboardButton("🔄 Yangilash", callback_data="adm_stats"),
-        InlineKeyboardButton("◀️ Orqaga",    callback_data="adm_menu"),
+        InlineKeyboardButton("◀️ Orqaga",    callback_data="adm_panel"),
     ]])
     await update.callback_query.edit_message_text(text, reply_markup=kb, parse_mode="HTML")
 
@@ -436,7 +448,7 @@ async def admin_users(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     nav.append(InlineKeyboardButton(f"{page + 1}/{total_pages}", callback_data="adm_noop"))
     if (page + 1) * per_page < total:
         nav.append(InlineKeyboardButton("Next ▶️", callback_data=f"adm_users_{page + 1}"))
-    kb = InlineKeyboardMarkup([nav, [InlineKeyboardButton("◀️ Orqaga", callback_data="adm_menu")]])
+    kb = InlineKeyboardMarkup([nav, [InlineKeyboardButton("◀️ Orqaga", callback_data="adm_panel")]])
     await update.callback_query.edit_message_text(text, reply_markup=kb, parse_mode="HTML")
 
 
@@ -464,7 +476,7 @@ async def admin_downloads(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     nav.append(InlineKeyboardButton(f"{page + 1}/{total_pages}", callback_data="adm_noop"))
     if (page + 1) * per_page < total:
         nav.append(InlineKeyboardButton("Next ▶️", callback_data=f"adm_dl_{page + 1}"))
-    kb = InlineKeyboardMarkup([nav, [InlineKeyboardButton("◀️ Orqaga", callback_data="adm_menu")]])
+    kb = InlineKeyboardMarkup([nav, [InlineKeyboardButton("◀️ Orqaga", callback_data="adm_panel")]])
     await update.callback_query.edit_message_text(text, reply_markup=kb, parse_mode="HTML")
 
 
@@ -480,7 +492,7 @@ async def admin_subs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         lines.append(f"{i}. {name} → @{s['target_username']} | {str(s['added_at'])[:10]}")
     text = f"🔔 <b>Obunalar</b> ({len(subs)} ta)\n\n" + ("\n".join(lines) or "Bo'sh")
 
-    kb = InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Orqaga", callback_data="adm_menu")]])
+    kb = InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Orqaga", callback_data="adm_panel")]])
     await update.callback_query.edit_message_text(text, reply_markup=kb, parse_mode="HTML")
 
 
@@ -488,25 +500,9 @@ async def admin_broadcast_menu(update: Update, context: ContextTypes.DEFAULT_TYP
     if update.effective_user.id != ADMIN_ID:
         return
     await update.callback_query.answer()
-    total = await database.get_users_count()
-    kb = InlineKeyboardMarkup([
-        [InlineKeyboardButton("✍️ Xabar yozish", callback_data="adm_bcast_write")],
-        [InlineKeyboardButton("◀️ Orqaga",        callback_data="adm_menu")],
-    ])
-    await update.callback_query.edit_message_text(
-        f"📢 <b>Broadcast</b>\n\nFoydalanuvchilar soni: {total}",
-        reply_markup=kb,
-        parse_mode="HTML",
-    )
-
-
-async def admin_broadcast_write(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if update.effective_user.id != ADMIN_ID:
-        return
-    await update.callback_query.answer()
     context.user_data["awaiting_broadcast"] = True
     await update.callback_query.edit_message_text(
-        "✍️ Broadcast xabarini yuboring (matn yoki forward):\n\n/admin — bekor qilish"
+        "Xabar yuboring (matn, rasm, video, ovozli xabar — hammasi qabul qilinadi):"
     )
 
 
@@ -517,7 +513,7 @@ async def handle_admin_broadcast(update: Update, context: ContextTypes.DEFAULT_T
 
     user_ids = await database.get_all_user_ids()
     sent, failed = 0, 0
-    progress = await update.message.reply_text(f"📤 0/{len(user_ids)} yuborilmoqda...")
+    progress = await update.message.reply_text(f"📤 Yuborilmoqda: 0/{len(user_ids)}...")
 
     for i, uid in enumerate(user_ids, 1):
         try:
@@ -535,7 +531,7 @@ async def handle_admin_broadcast(update: Update, context: ContextTypes.DEFAULT_T
 
         if i % 10 == 0:
             try:
-                await progress.edit_text(f"📤 {i}/{len(user_ids)} yuborilmoqda...")
+                await progress.edit_text(f"📤 Yuborilmoqda: {i}/{len(user_ids)}...")
             except Exception:
                 pass
 
@@ -614,13 +610,13 @@ def main() -> None:
     application.add_handler(conv)
 
     # admin panel — registered outside ConversationHandler
-    application.add_handler(CallbackQueryHandler(show_menu, pattern="^adm_menu$"))
+    application.add_handler(CallbackQueryHandler(show_menu,            pattern="^adm_menu$"))
+    application.add_handler(CallbackQueryHandler(admin_panel,          pattern="^adm_panel$"))
     application.add_handler(CallbackQueryHandler(admin_stats,          pattern="^adm_stats$"))
     application.add_handler(CallbackQueryHandler(admin_users,          pattern=r"^adm_users_\d+$"))
     application.add_handler(CallbackQueryHandler(admin_downloads,      pattern=r"^adm_dl_\d+$"))
     application.add_handler(CallbackQueryHandler(admin_subs,           pattern="^adm_subs$"))
     application.add_handler(CallbackQueryHandler(admin_broadcast_menu, pattern="^adm_broadcast$"))
-    application.add_handler(CallbackQueryHandler(admin_broadcast_write, pattern="^adm_bcast_write$"))
     application.add_handler(CallbackQueryHandler(lambda u, c: u.callback_query.answer(), pattern="^adm_noop$"))
     application.add_handler(
         MessageHandler(filters.ALL & filters.User(ADMIN_ID), handle_admin_broadcast),
