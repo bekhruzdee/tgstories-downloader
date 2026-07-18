@@ -157,3 +157,15 @@ async def get_story_by_id(username: str, story_id: int) -> tuple:
         return result
 
     raise Exception(f"Bu storyda yuklab bo'ladigan media yo'q ({type(story.media).__name__})!")
+
+
+async def get_story_ids(username: str) -> list[int]:
+    """Return IDs of all active stories for a user without downloading media."""
+    try:
+        peer = await app.resolve_peer(username)
+        r = await app.invoke(GetPeerStories(peer=peer))
+        return [s.id for s in r.stories.stories
+                if isinstance(s, (StoryItem, StoryItemSkipped))]
+    except Exception as e:
+        print(f"[DEBUG] get_story_ids({username}): {type(e).__name__}: {e}")
+        return []
