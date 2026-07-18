@@ -27,8 +27,8 @@ CHOOSING, WAITING_USERNAME, WAITING_URL, CHOOSING_LANG, WAITING_SUB_USERNAME = r
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 
-def main_keyboard(lang: str) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup([
+def main_keyboard(user_id: int, lang: str) -> InlineKeyboardMarkup:
+    rows = [
         [
             InlineKeyboardButton(t(lang, "btn_username"), callback_data="by_username"),
             InlineKeyboardButton(t(lang, "btn_url"),      callback_data="by_url"),
@@ -37,7 +37,19 @@ def main_keyboard(lang: str) -> InlineKeyboardMarkup:
             InlineKeyboardButton(t(lang, "btn_lang"),   callback_data="lang_menu"),
             InlineKeyboardButton(t(lang, "btn_mysubs"), callback_data="mysubs"),
         ],
-    ])
+    ]
+    if user_id == ADMIN_ID:
+        rows.append([
+            InlineKeyboardButton("📊 Statistika",       callback_data="adm_stats"),
+            InlineKeyboardButton("👥 Foydalanuvchilar", callback_data="adm_users_0"),
+        ])
+        rows.append([
+            InlineKeyboardButton("⬇️ Yuklamalar", callback_data="adm_dl_0"),
+            InlineKeyboardButton("📢 Broadcast",  callback_data="adm_broadcast"),
+        ])
+    return InlineKeyboardMarkup(rows)
+
+
 
 
 def parse_story_url(url: str) -> tuple[str | None, int | None]:
@@ -100,7 +112,7 @@ async def show_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         await _send_or_edit(update, t(lang, "subscribe_required", channel=CHANNEL_USERNAME), kb)
         return CHOOSING
 
-    await _send_or_edit(update, t(lang, "choose_method"), main_keyboard(lang))
+    await _send_or_edit(update, t(lang, "choose_method"), main_keyboard(user.id, lang))
     return CHOOSING
 
 
@@ -133,12 +145,12 @@ async def handle_username(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         files = await get_user_stories(username)
     except Exception as e:
         await msg.edit_text(f"❌ {e}")
-        await update.message.reply_text(t(lang, "try_again"), reply_markup=main_keyboard(lang))
+        await update.message.reply_text(t(lang, "try_again"), reply_markup=main_keyboard(user.id, lang))
         return CHOOSING
 
     if not files:
         await msg.edit_text(t(lang, "no_stories"))
-        await update.message.reply_text(t(lang, "try_again"), reply_markup=main_keyboard(lang))
+        await update.message.reply_text(t(lang, "try_again"), reply_markup=main_keyboard(user.id, lang))
         return CHOOSING
 
     total = len(files)
@@ -161,14 +173,14 @@ async def handle_username(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             if os.path.exists(leftover):
                 os.remove(leftover)
         await msg.edit_text(f"❌ {e}")
-        await update.message.reply_text(t(lang, "try_again"), reply_markup=main_keyboard(lang))
+        await update.message.reply_text(t(lang, "try_again"), reply_markup=main_keyboard(user.id, lang))
         return CHOOSING
 
     await database.log_download(user.id, username, "username")
 
     await msg.edit_text(
         t(lang, "done_user", username=username, total=total),
-        reply_markup=main_keyboard(lang),
+        reply_markup=main_keyboard(user.id, lang),
     )
     return CHOOSING
 
@@ -196,7 +208,7 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         media_type, path = await get_story_by_id(username, story_id)
     except Exception as e:
         await msg.edit_text(f"❌ {e}")
-        await update.message.reply_text(t(lang, "try_again"), reply_markup=main_keyboard(lang))
+        await update.message.reply_text(t(lang, "try_again"), reply_markup=main_keyboard(user.id, lang))
         return CHOOSING
 
     try:
@@ -209,14 +221,14 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
                 await update.message.reply_photo(photo=f, caption=caption)
     except Exception as e:
         await msg.edit_text(f"❌ {e}")
-        await update.message.reply_text(t(lang, "try_again"), reply_markup=main_keyboard(lang))
+        await update.message.reply_text(t(lang, "try_again"), reply_markup=main_keyboard(user.id, lang))
         return CHOOSING
     finally:
         if os.path.exists(path):
             os.remove(path)
 
     await database.log_download(user.id, f"{username}/s/{story_id}", "url")
-    await msg.edit_text(t(lang, "done_url"), reply_markup=main_keyboard(lang))
+    await msg.edit_text(t(lang, "done_url"), reply_markup=main_keyboard(user.id, lang))
     return CHOOSING
 
 # ── language selection ────────────────────────────────────────────────────────
@@ -242,7 +254,7 @@ async def save_lang(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     await database.update_lang(user_id, new_lang)
     await update.callback_query.answer(t(new_lang, "lang_saved"), show_alert=True)
     await update.callback_query.edit_message_text(
-        t(new_lang, "choose_method"), reply_markup=main_keyboard(new_lang)
+        t(new_lang, "choose_method"), reply_markup=main_keyboard(user_id, new_lang)
     )
     return CHOOSING
 
@@ -275,7 +287,7 @@ async def handle_sub_username(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     await database.add_subscription(user.id, username)
     await update.message.reply_text(
-        t(lang, "sub_added", username=username), reply_markup=main_keyboard(lang)
+        t(lang, "sub_added", username=username), reply_markup=main_keyboard(user.id, lang)
     )
     return CHOOSING
 
@@ -293,8 +305,9 @@ async def remove_sub(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 # ── cancel ────────────────────────────────────────────────────────────────────
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    lang = await database.get_lang(update.effective_user.id)
-    await update.message.reply_text(t(lang, "cancelled"), reply_markup=main_keyboard(lang))
+    user_id = update.effective_user.id
+    lang = await database.get_lang(user_id)
+    await update.message.reply_text(t(lang, "cancelled"), reply_markup=main_keyboard(user_id, lang))
     return CHOOSING
 
 # ── admin commands ────────────────────────────────────────────────────────────
@@ -371,31 +384,6 @@ async def broadcast_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     return CHOOSING
 
 # ── admin panel ───────────────────────────────────────────────────────────────
-
-def _admin_kbd() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton("📊 Statistika",       callback_data="adm_stats"),
-            InlineKeyboardButton("👥 Foydalanuvchilar", callback_data="adm_users_0"),
-        ],
-        [
-            InlineKeyboardButton("⬇️ Yuklamalar", callback_data="adm_dl_0"),
-            InlineKeyboardButton("🔔 Obunalar",   callback_data="adm_subs"),
-        ],
-        [InlineKeyboardButton("📢 Broadcast", callback_data="adm_broadcast")],
-    ])
-
-
-async def admin_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if update.effective_user.id != ADMIN_ID:
-        return
-    context.user_data.pop("awaiting_broadcast", None)
-    if update.callback_query:
-        await update.callback_query.answer()
-        await update.callback_query.edit_message_text("🔐 Admin panel:", reply_markup=_admin_kbd())
-    else:
-        await update.message.reply_text("🔐 Admin panel:", reply_markup=_admin_kbd())
-
 
 async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if update.effective_user.id != ADMIN_ID:
@@ -626,8 +614,7 @@ def main() -> None:
     application.add_handler(conv)
 
     # admin panel — registered outside ConversationHandler
-    application.add_handler(CommandHandler("admin", admin_cmd))
-    application.add_handler(CallbackQueryHandler(admin_cmd,            pattern="^adm_menu$"))
+    application.add_handler(CallbackQueryHandler(show_menu, pattern="^adm_menu$"))
     application.add_handler(CallbackQueryHandler(admin_stats,          pattern="^adm_stats$"))
     application.add_handler(CallbackQueryHandler(admin_users,          pattern=r"^adm_users_\d+$"))
     application.add_handler(CallbackQueryHandler(admin_downloads,      pattern=r"^adm_dl_\d+$"))
