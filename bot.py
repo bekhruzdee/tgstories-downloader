@@ -303,6 +303,7 @@ async def stats_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         f"⬇️ Jami yuklamalar: {s['total_downloads']}\n"
         f"📅 Bugun yukladi: {s['today_downloads']}"
     )
+    return CHOOSING
 
 
 async def users_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -311,12 +312,13 @@ async def users_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     recent = await database.get_recent_users(10)
     if not recent:
         await update.message.reply_text("Bo'sh")
-        return
+        return CHOOSING
     lines = []
     for i, u in enumerate(recent, 1):
         uname = f"@{u['username']}" if u["username"] else "—"
         lines.append(f"{i}. {u['full_name']} ({uname}) — {str(u['joined_at'])[:10]}")
     await update.message.reply_text("\n".join(lines))
+    return CHOOSING
 
 
 async def broadcast_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -325,7 +327,7 @@ async def broadcast_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     text = " ".join(context.args)
     if not text:
         await update.message.reply_text("Foydalanish: /broadcast <matn>")
-        return
+        return CHOOSING
 
     user_ids = await database.get_all_user_ids()
     sent, failed = 0, 0
@@ -356,6 +358,7 @@ async def broadcast_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     await progress.edit_text(
         f"✅ Broadcast tugadi!\n✅ Yuborildi: {sent}\n❌ Xato: {failed}"
     )
+    return CHOOSING
 
 # ── lifecycle ─────────────────────────────────────────────────────────────────
 
