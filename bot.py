@@ -108,7 +108,7 @@ async def check_sub_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     user_id = update.callback_query.from_user.id
     lang = await database.get_lang(user_id)
     if await is_subscribed(context.bot, user_id):
-        await update.callback_query.answer()
+        # don't answer here — show_menu will answer the callback_query
         return await show_menu(update, context)
     await update.callback_query.answer(t(lang, "subscribe_required", channel=CHANNEL_USERNAME)[:200], show_alert=True)
     return CHOOSING
@@ -144,18 +144,23 @@ async def handle_username(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     await database.log_download(user.id, username, "username")
     total = len(files)
 
-    for i, (media_type, path) in enumerate(files, 1):
-        try:
-            await msg.edit_text(t(lang, "sending", i=i, total=total))
-            caption = f"{'🎬' if media_type == 'video' else '🖼'} @{username} — {i}/{total}"
-            with open(path, "rb") as f:
-                if media_type == "video":
-                    await update.message.reply_video(video=f, caption=caption)
-                else:
-                    await update.message.reply_photo(photo=f, caption=caption)
-        finally:
-            if os.path.exists(path):
-                os.remove(path)
+    try:
+        for i, (media_type, path) in enumerate(files, 1):
+            try:
+                await msg.edit_text(t(lang, "sending", i=i, total=total))
+                caption = f"{'🎬' if media_type == 'video' else '🖼'} @{username} — {i}/{total}"
+                with open(path, "rb") as f:
+                    if media_type == "video":
+                        await update.message.reply_video(video=f, caption=caption)
+                    else:
+                        await update.message.reply_photo(photo=f, caption=caption)
+            finally:
+                if os.path.exists(path):
+                    os.remove(path)
+    except Exception as e:
+        await msg.edit_text(f"❌ {e}")
+        await update.message.reply_text(t(lang, "try_again"), reply_markup=main_keyboard(lang))
+        return CHOOSING
 
     await msg.edit_text(
         t(lang, "done_user", username=username, total=total),
@@ -287,9 +292,9 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
 # ── admin commands ────────────────────────────────────────────────────────────
 
-async def stats_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def stats_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     if update.effective_user.id != ADMIN_ID:
-        return
+        return CHOOSING
     s = await database.get_stats()
     await update.message.reply_text(
         f"📊 Statistika:\n"
@@ -300,9 +305,9 @@ async def stats_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
-async def users_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def users_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     if update.effective_user.id != ADMIN_ID:
-        return
+        return CHOOSING
     recent = await database.get_recent_users(10)
     if not recent:
         await update.message.reply_text("Bo'sh")
@@ -314,9 +319,9 @@ async def users_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text("\n".join(lines))
 
 
-async def broadcast_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def broadcast_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     if update.effective_user.id != ADMIN_ID:
-        return
+        return CHOOSING
     text = " ".join(context.args)
     if not text:
         await update.message.reply_text("Foydalanish: /broadcast <matn>")
