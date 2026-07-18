@@ -511,33 +511,42 @@ async def handle_admin_broadcast(update: Update, context: ContextTypes.DEFAULT_T
         return
     context.user_data.pop("awaiting_broadcast", None)
 
-    user_ids = await database.get_all_user_ids()
-    sent, failed = 0, 0
-    progress = await update.message.reply_text(f"📤 Yuborilmoqda: 0/{len(user_ids)}...")
+    # Store message reference so we can copy it after the loop
+    context.bot_data["broadcast_msg_chat_id"] = update.message.chat.id
+    context.bot_data["broadcast_msg_id"] = update.message.message_id
 
-    for i, uid in enumerate(user_ids, 1):
+    broadcast_chat_id = context.bot_data["broadcast_msg_chat_id"]
+    broadcast_msg_id  = context.bot_data["broadcast_msg_id"]
+
+    user_ids = await database.get_all_user_ids()
+    print(f"[BROADCAST] Total users: {len(user_ids)}, IDs: {user_ids}")
+
+    sent, failed = 0, 0
+    progress_msg = await update.message.reply_text(f"📤 Yuborilmoqda: 0/{len(user_ids)}...")
+
+    for i, uid in enumerate(user_ids):
         try:
-            await update.message.copy_to(uid)
+            uid = int(uid)
+            await context.bot.copy_message(
+                chat_id=uid,
+                from_chat_id=broadcast_chat_id,
+                message_id=broadcast_msg_id,
+            )
             sent += 1
-        except RetryAfter as e:
-            await asyncio.sleep(e.retry_after + 1)
-            try:
-                await update.message.copy_to(uid)
-                sent += 1
-            except Exception:
-                failed += 1
-        except Exception:
+            print(f"[BROADCAST] Sent to {uid}")
+        except Exception as e:
             failed += 1
+            print(f"[BROADCAST] Failed {uid}: {e}")
 
         if i % 10 == 0:
             try:
-                await progress.edit_text(f"📤 Yuborilmoqda: {i}/{len(user_ids)}...")
+                await progress_msg.edit_text(f"📤 Yuborilmoqda: {i + 1}/{len(user_ids)}...")
             except Exception:
                 pass
 
         await asyncio.sleep(0.05)
 
-    await progress.edit_text(f"✅ Yuborildi: {sent} | ❌ Xato: {failed}")
+    await progress_msg.edit_text(f"✅ Yuborildi: {sent} | ❌ Xato: {failed}")
 
 # ── lifecycle ─────────────────────────────────────────────────────────────────
 
