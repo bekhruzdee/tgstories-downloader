@@ -40,8 +40,8 @@ async def _check_subscriptions() -> None:
             lang = await database.get_lang(user_id)
 
             for story_id in new_ids:
+                path = None
                 try:
-                    os.makedirs("stories", exist_ok=True)
                     media_type, path = await get_story_by_id(username, story_id)
                     caption = t(lang, "sub_notify", username=username)
                     with open(path, "rb") as f:
@@ -49,11 +49,12 @@ async def _check_subscriptions() -> None:
                             await _bot.send_video(user_id, f, caption=caption)
                         else:
                             await _bot.send_photo(user_id, f, caption=caption)
-                    if os.path.exists(path):
-                        os.remove(path)
                 except Exception as e:
                     log.error("Scheduler: failed to send story %s/%s to %s: %s",
                               username, story_id, user_id, e)
+                finally:
+                    if path and os.path.exists(path):
+                        os.remove(path)
 
         except Exception as e:
             log.error("Scheduler: error processing sub %s for user %s: %s",
@@ -65,6 +66,7 @@ async def _check_subscriptions() -> None:
 def start_scheduler(bot) -> None:
     global _bot
     _bot = bot
+    os.makedirs("stories", exist_ok=True)
     _scheduler.add_job(_check_subscriptions, "interval", minutes=30, id="sub_check")
     _scheduler.start()
     log.info("Scheduler started (30-min interval)")

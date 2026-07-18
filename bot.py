@@ -141,7 +141,6 @@ async def handle_username(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await update.message.reply_text(t(lang, "try_again"), reply_markup=main_keyboard(lang))
         return CHOOSING
 
-    await database.log_download(user.id, username, "username")
     total = len(files)
 
     try:
@@ -158,9 +157,14 @@ async def handle_username(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 if os.path.exists(path):
                     os.remove(path)
     except Exception as e:
+        for _, leftover in files:
+            if os.path.exists(leftover):
+                os.remove(leftover)
         await msg.edit_text(f"❌ {e}")
         await update.message.reply_text(t(lang, "try_again"), reply_markup=main_keyboard(lang))
         return CHOOSING
+
+    await database.log_download(user.id, username, "username")
 
     await msg.edit_text(
         t(lang, "done_user", username=username, total=total),
@@ -195,8 +199,6 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         await update.message.reply_text(t(lang, "try_again"), reply_markup=main_keyboard(lang))
         return CHOOSING
 
-    await database.log_download(user.id, f"{username}/s/{story_id}", "url")
-
     try:
         await msg.edit_text(t(lang, "sending", i=1, total=1))
         caption = f"{'🎬' if media_type == 'video' else '🖼'} @{username}/s/{story_id}"
@@ -205,10 +207,15 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
                 await update.message.reply_video(video=f, caption=caption)
             else:
                 await update.message.reply_photo(photo=f, caption=caption)
+    except Exception as e:
+        await msg.edit_text(f"❌ {e}")
+        await update.message.reply_text(t(lang, "try_again"), reply_markup=main_keyboard(lang))
+        return CHOOSING
     finally:
         if os.path.exists(path):
             os.remove(path)
 
+    await database.log_download(user.id, f"{username}/s/{story_id}", "url")
     await msg.edit_text(t(lang, "done_url"), reply_markup=main_keyboard(lang))
     return CHOOSING
 
@@ -262,7 +269,7 @@ async def handle_sub_username(update: Update, context: ContextTypes.DEFAULT_TYPE
     lang = await database.get_lang(user.id)
     username = update.message.text.strip().lstrip("@").lower()
 
-    if len(username) < 3:
+    if len(username) < 5:
         await update.message.reply_text(t(lang, "enter_sub_username"))
         return WAITING_SUB_USERNAME
 
@@ -321,26 +328,16 @@ async def users_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     return CHOOSING
 
 
-async def broadcast_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    if update.effective_user.id != ADMIN_ID:
-        return CHOOSING
-    text = " ".join(context.args)
-    if not text:
-        await update.message.reply_text("Foydalanish: /broadcast <matn>")
-        return CHOOSING
-
-    user_ids = await database.get_all_user_ids()
+async def _do_broadcast(bot, text: str, user_ids: list[int], progress) -> None:
     sent, failed = 0, 0
-    progress = await update.message.reply_text(f"📤 0/{len(user_ids)} yuborilmoqda...")
-
     for i, uid in enumerate(user_ids, 1):
         try:
-            await context.bot.send_message(uid, text)
+            await bot.send_message(uid, text)
             sent += 1
         except RetryAfter as e:
             await asyncio.sleep(e.retry_after + 1)
             try:
-                await context.bot.send_message(uid, text)
+                await bot.send_message(uid, text)
                 sent += 1
             except Exception:
                 failed += 1
@@ -358,6 +355,19 @@ async def broadcast_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     await progress.edit_text(
         f"✅ Broadcast tugadi!\n✅ Yuborildi: {sent}\n❌ Xato: {failed}"
     )
+
+
+async def broadcast_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    if update.effective_user.id != ADMIN_ID:
+        return CHOOSING
+    text = " ".join(context.args)
+    if not text:
+        await update.message.reply_text("Foydalanish: /broadcast <matn>")
+        return CHOOSING
+
+    user_ids = await database.get_all_user_ids()
+    progress = await update.message.reply_text(f"📤 0/{len(user_ids)} yuborilmoqda...")
+    asyncio.create_task(_do_broadcast(context.bot, text, user_ids, progress))
     return CHOOSING
 
 # ── lifecycle ─────────────────────────────────────────────────────────────────

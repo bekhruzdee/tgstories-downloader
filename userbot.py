@@ -1,3 +1,6 @@
+import logging
+import os
+
 from pyrogram import Client, types
 from pyrogram.raw.functions.stories import GetPeerStories, GetStoriesByID
 from pyrogram.raw.types import (
@@ -10,7 +13,8 @@ from pyrogram.raw.types import (
 )
 from pyrogram.errors import UserPrivacyRestricted, PeerIdInvalid
 from config import API_ID, API_HASH
-import os
+
+log = logging.getLogger(__name__)
 
 app = Client("userbot_session", api_id=API_ID, api_hash=API_HASH)
 
@@ -160,12 +164,11 @@ async def get_story_by_id(username: str, story_id: int) -> tuple:
 
 
 async def get_story_ids(username: str) -> list[int]:
-    """Return IDs of all active stories for a user without downloading media."""
+    """Return IDs of all accessible active stories for a user without downloading."""
     try:
         peer = await app.resolve_peer(username)
         r = await app.invoke(GetPeerStories(peer=peer))
-        return [s.id for s in r.stories.stories
-                if isinstance(s, (StoryItem, StoryItemSkipped))]
+        return [s.id for s in r.stories.stories if isinstance(s, StoryItem)]
     except Exception as e:
-        print(f"[DEBUG] get_story_ids({username}): {type(e).__name__}: {e}")
+        log.warning("get_story_ids(%s): %s: %s", username, type(e).__name__, e)
         return []
