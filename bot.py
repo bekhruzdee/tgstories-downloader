@@ -149,12 +149,12 @@ async def handle_username(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         files = await get_user_stories(username)
     except Exception as e:
         await msg.edit_text(f"❌ {e}")
-        await update.message.reply_text(t(lang, "try_again"), reply_markup=main_keyboard(user.id, lang))
+        await update.message.reply_text(t(lang, "send_prompt"), reply_markup=main_keyboard(user.id, lang))
         return CHOOSING
 
     if not files:
         await msg.edit_text(t(lang, "no_stories"))
-        await update.message.reply_text(t(lang, "try_again"), reply_markup=main_keyboard(user.id, lang))
+        await update.message.reply_text(t(lang, "send_prompt"), reply_markup=main_keyboard(user.id, lang))
         return CHOOSING
 
     total = len(files)
@@ -177,7 +177,7 @@ async def handle_username(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             if os.path.exists(leftover):
                 os.remove(leftover)
         await msg.edit_text(f"❌ {e}")
-        await update.message.reply_text(t(lang, "try_again"), reply_markup=main_keyboard(user.id, lang))
+        await update.message.reply_text(t(lang, "send_prompt"), reply_markup=main_keyboard(user.id, lang))
         return CHOOSING
 
     await database.log_download(user.id, username, "username")
@@ -205,7 +205,8 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
     if not username or not story_id:
         await update.message.reply_text(t(lang, "bad_url"))
-        return WAITING_URL
+        await update.message.reply_text(t(lang, "send_prompt"), reply_markup=main_keyboard(user.id, lang))
+        return CHOOSING
 
     msg = await update.message.reply_text(t(lang, "downloading"))
 
@@ -213,7 +214,7 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         media_type, path = await get_story_by_id(username, story_id)
     except Exception as e:
         await msg.edit_text(f"❌ {e}")
-        await update.message.reply_text(t(lang, "try_again"), reply_markup=main_keyboard(user.id, lang))
+        await update.message.reply_text(t(lang, "send_prompt"), reply_markup=main_keyboard(user.id, lang))
         return CHOOSING
 
     try:
@@ -226,7 +227,7 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
                 await update.message.reply_photo(photo=f, caption=caption)
     except Exception as e:
         await msg.edit_text(f"❌ {e}")
-        await update.message.reply_text(t(lang, "try_again"), reply_markup=main_keyboard(user.id, lang))
+        await update.message.reply_text(t(lang, "send_prompt"), reply_markup=main_keyboard(user.id, lang))
         return CHOOSING
     finally:
         if os.path.exists(path):
@@ -275,7 +276,8 @@ async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     user_id = update.effective_user.id
     lang = await database.get_lang(user_id)
-    await update.message.reply_text(t(lang, "cancelled"), reply_markup=main_keyboard(user_id, lang))
+    await update.message.reply_text(t(lang, "cancelled"))
+    await update.message.reply_text(t(lang, "send_prompt"), reply_markup=main_keyboard(user_id, lang))
     return CHOOSING
 
 # ── admin commands ────────────────────────────────────────────────────────────
@@ -504,6 +506,9 @@ async def handle_admin_broadcast(update: Update, context: ContextTypes.DEFAULT_T
         await asyncio.sleep(0.05)
 
     await progress_msg.edit_text(f"✅ Yuborildi: {sent} | ❌ Xato: {failed}")
+    user_id = update.effective_user.id
+    lang = await database.get_lang(user_id)
+    await update.effective_message.reply_text(t(lang, "send_prompt"), reply_markup=main_keyboard(user_id, lang))
 
 # ── lifecycle ─────────────────────────────────────────────────────────────────
 
