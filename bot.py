@@ -182,8 +182,9 @@ async def handle_username(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     await database.log_download(user.id, username, "username")
 
-    await msg.edit_text(
-        f"✅ @{username} ning {total} ta storiysi yuborildi!",
+    await msg.edit_text(f"✅ @{username} ning {total} ta storiysi yuborildi!")
+    await update.message.reply_text(
+        t(lang, "send_prompt"),
         reply_markup=main_keyboard(user.id, lang),
     )
     return CHOOSING
@@ -232,8 +233,9 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
             os.remove(path)
 
     await database.log_download(user.id, f"{username}/s/{story_id}", "url")
-    await msg.edit_text(
-        "✅ Story muvaffaqiyatli yuborildi!",
+    await msg.edit_text("✅ Story muvaffaqiyatli yuborildi!")
+    await update.message.reply_text(
+        t(lang, "send_prompt"),
         reply_markup=main_keyboard(user.id, lang),
     )
     return CHOOSING
