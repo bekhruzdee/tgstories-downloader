@@ -23,7 +23,7 @@ from userbot import app as userbot_client, get_story_by_id, get_user_stories
 
 log = logging.getLogger(__name__)
 
-CHOOSING, WAITING_USERNAME, WAITING_URL, CHOOSING_LANG, WAITING_SUB_USERNAME = range(5)
+CHOOSING, WAITING_USERNAME, WAITING_URL, CHOOSING_LANG = range(4)
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -34,8 +34,7 @@ def main_keyboard(user_id: int, lang: str) -> InlineKeyboardMarkup:
             InlineKeyboardButton(t(lang, "btn_url"),      callback_data="by_url"),
         ],
         [
-            InlineKeyboardButton(t(lang, "btn_lang"),   callback_data="lang_menu"),
-            InlineKeyboardButton(t(lang, "btn_mysubs"), callback_data="mysubs"),
+            InlineKeyboardButton(t(lang, "btn_lang_change"), callback_data="lang_menu"),
         ],
     ]
     if user_id == ADMIN_ID:
@@ -43,6 +42,30 @@ def main_keyboard(user_id: int, lang: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(rows)
 
 
+def _lang_keyboard_first() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([[
+        InlineKeyboardButton("🇺🇿 O'zbek",  callback_data="lang_uz"),
+        InlineKeyboardButton("🇷🇺 Русский", callback_data="lang_ru"),
+        InlineKeyboardButton("🇬🇧 English", callback_data="lang_en"),
+    ]])
+
+
+def _lang_keyboard_change(lang: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("🇺🇿 O'zbek",  callback_data="lang_uz"),
+            InlineKeyboardButton("🇷🇺 Русский", callback_data="lang_ru"),
+            InlineKeyboardButton("🇬🇧 English", callback_data="lang_en"),
+        ],
+        [InlineKeyboardButton(t(lang, "back"), callback_data="back_menu")],
+    ])
+
+
+async def _user_exists(user_id: int) -> bool:
+    row = await database._pool.fetchrow(
+        "SELECT 1 FROM users WHERE user_id = $1", user_id
+    )
+    return row is not None
 
 
 def parse_story_url(url: str) -> tuple[str | None, int | None]:
@@ -63,32 +86,27 @@ async def is_subscribed(bot, user_id: int) -> bool:
 
 
 async def _send_or_edit(update: Update, text: str, keyboard=None) -> None:
-    """Edit existing message if callback_query, otherwise send new."""
     if update.callback_query:
         await update.callback_query.edit_message_text(text, reply_markup=keyboard)
     else:
         await update.message.reply_text(text, reply_markup=keyboard)
 
-
-async def _subs_view(user_id: int, lang: str) -> tuple[str, InlineKeyboardMarkup]:
-    """Build (text, keyboard) for the subscriptions screen."""
-    subs = await database.get_subscriptions(user_id)
-    buttons: list[list[InlineKeyboardButton]] = []
-    if subs:
-        listing = "\n".join(f"• @{s['username']}" for s in subs)
-        text = t(lang, "mysubs_list", list=listing)
-        for sub in subs:
-            buttons.append([InlineKeyboardButton(
-                f"➖ @{sub['username']}",
-                callback_data=f"remove_sub_{sub['username']}",
-            )])
-    else:
-        text = t(lang, "mysubs_empty")
-    buttons.append([InlineKeyboardButton(t(lang, "sub_btn_add"), callback_data="add_sub")])
-    buttons.append([InlineKeyboardButton(t(lang, "back"), callback_data="back_menu")])
-    return text, InlineKeyboardMarkup(buttons)
-
 # ── core menu ─────────────────────────────────────────────────────────────────
+
+async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    user = update.effective_user
+
+    if not await _user_exists(user.id):
+        # Save with default lang first so save_lang's update_lang has a row to update
+        await database.save_user(user.id, user.username, user.full_name)
+        await update.message.reply_text(
+            "🌍 Tilni tanlang / Выберите язык / Choose language:",
+            reply_markup=_lang_keyboard_first(),
+        )
+        return CHOOSING_LANG
+
+    return await show_menu(update, context)
+
 
 async def show_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     user = update.effective_user
@@ -113,7 +131,6 @@ async def check_sub_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     user_id = update.callback_query.from_user.id
     lang = await database.get_lang(user_id)
     if await is_subscribed(context.bot, user_id):
-        # don't answer here — show_menu will answer the callback_query
         return await show_menu(update, context)
     await update.callback_query.answer(t(lang, "subscribe_required", channel=CHANNEL_USERNAME)[:200], show_alert=True)
     return CHOOSING
@@ -229,15 +246,9 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 async def choose_lang_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     lang = await database.get_lang(update.callback_query.from_user.id)
     await update.callback_query.answer()
-    kb = InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton("🇺🇿 O'zbek",   callback_data="lang_uz"),
-            InlineKeyboardButton("🇷🇺 Русский",   callback_data="lang_ru"),
-            InlineKeyboardButton("🇬🇧 English",   callback_data="lang_en"),
-        ],
-        [InlineKeyboardButton(t(lang, "back"), callback_data="back_menu")],
-    ])
-    await update.callback_query.edit_message_text(t(lang, "choose_lang"), reply_markup=kb)
+    await update.callback_query.edit_message_text(
+        t(lang, "choose_lang"), reply_markup=_lang_keyboard_change(lang)
+    )
     return CHOOSING_LANG
 
 
@@ -249,50 +260,6 @@ async def save_lang(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     await update.callback_query.edit_message_text(
         t(new_lang, "choose_method"), reply_markup=main_keyboard(user_id, new_lang)
     )
-    return CHOOSING
-
-# ── subscriptions ─────────────────────────────────────────────────────────────
-
-async def show_subs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    user_id = update.callback_query.from_user.id
-    lang = await database.get_lang(user_id)
-    await update.callback_query.answer()
-    text, kb = await _subs_view(user_id, lang)
-    await update.callback_query.edit_message_text(text, reply_markup=kb)
-    return CHOOSING
-
-
-async def ask_add_sub(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    lang = await database.get_lang(update.callback_query.from_user.id)
-    await update.callback_query.answer()
-    await update.callback_query.edit_message_text(t(lang, "enter_sub_username"))
-    return WAITING_SUB_USERNAME
-
-
-async def handle_sub_username(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    user = update.effective_user
-    lang = await database.get_lang(user.id)
-    username = update.message.text.strip().lstrip("@").lower()
-
-    if len(username) < 5:
-        await update.message.reply_text(t(lang, "enter_sub_username"))
-        return WAITING_SUB_USERNAME
-
-    await database.add_subscription(user.id, username)
-    await update.message.reply_text(
-        t(lang, "sub_added", username=username), reply_markup=main_keyboard(user.id, lang)
-    )
-    return CHOOSING
-
-
-async def remove_sub(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    user_id = update.callback_query.from_user.id
-    lang = await database.get_lang(user_id)
-    target = update.callback_query.data[len("remove_sub_"):]
-    await database.remove_subscription(user_id, target)
-    await update.callback_query.answer(t(lang, "sub_removed", username=target), show_alert=True)
-    text, kb = await _subs_view(user_id, lang)
-    await update.callback_query.edit_message_text(text, reply_markup=kb)
     return CHOOSING
 
 # ── cancel ────────────────────────────────────────────────────────────────────
@@ -387,10 +354,7 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             InlineKeyboardButton("📊 Statistika",       callback_data="adm_stats"),
             InlineKeyboardButton("👥 Foydalanuvchilar", callback_data="adm_users_0"),
         ],
-        [
-            InlineKeyboardButton("⬇️ Yuklamalar", callback_data="adm_dl_0"),
-            InlineKeyboardButton("🔔 Obunalar",   callback_data="adm_subs"),
-        ],
+        [InlineKeyboardButton("⬇️ Yuklamalar", callback_data="adm_dl_0")],
         [InlineKeyboardButton("📢 Broadcast", callback_data="adm_broadcast")],
         [InlineKeyboardButton("◀️ Orqaga",    callback_data="adm_menu")],
     ])
@@ -433,14 +397,16 @@ async def admin_users(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     total = await database.get_users_count()
     total_pages = max(1, (total + per_page - 1) // per_page)
 
+    print(f"[admin_users] page={page}, users count={len(users)}, total={total}")
     lines = []
     for i, u in enumerate(users, page * per_page + 1):
         uname = f"@{u['username']}" if u["username"] else "—"
+        joined = str(u["joined_at"])[:10] if u["joined_at"] else "—"
         lines.append(
-            f"{i}. {u['full_name']} ({uname}) | ID: {u['user_id']} | "
-            f"{u['lang']} | Yuklamalar: {u['download_count']}"
+            f"{i}. {u['full_name']} ({uname})\n"
+            f"🆔 {u['user_id']} | 📅 {joined} | ⬇️ {u['download_count']} ta"
         )
-    text = f"👥 <b>Foydalanuvchilar</b> ({total} ta)\n\n" + ("\n".join(lines) or "Bo'sh")
+    text = f"👥 <b>Foydalanuvchilar</b> ({total} ta)\n\n" + ("\n\n".join(lines) or "Bo'sh")
 
     nav = []
     if page > 0:
@@ -480,22 +446,6 @@ async def admin_downloads(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     await update.callback_query.edit_message_text(text, reply_markup=kb, parse_mode="HTML")
 
 
-async def admin_subs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if update.effective_user.id != ADMIN_ID:
-        return
-    await update.callback_query.answer()
-    subs = await database.get_all_subscriptions_detailed()
-
-    lines = []
-    for i, s in enumerate(subs, 1):
-        name = s["full_name"] or "—"
-        lines.append(f"{i}. {name} → @{s['target_username']} | {str(s['added_at'])[:10]}")
-    text = f"🔔 <b>Obunalar</b> ({len(subs)} ta)\n\n" + ("\n".join(lines) or "Bo'sh")
-
-    kb = InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Orqaga", callback_data="adm_panel")]])
-    await update.callback_query.edit_message_text(text, reply_markup=kb, parse_mode="HTML")
-
-
 async def admin_broadcast_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if update.effective_user.id != ADMIN_ID:
         return
@@ -511,7 +461,6 @@ async def handle_admin_broadcast(update: Update, context: ContextTypes.DEFAULT_T
         return
     context.user_data.pop("awaiting_broadcast", None)
 
-    # Store message reference so we can copy it after the loop
     context.bot_data["broadcast_msg_chat_id"] = update.message.chat.id
     context.bot_data["broadcast_msg_id"] = update.message.message_id
 
@@ -568,40 +517,33 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO)
 
     conv = ConversationHandler(
-        entry_points=[CommandHandler("start", show_menu)],
+        entry_points=[CommandHandler("start", cmd_start)],
         states={
             CHOOSING: [
-                CommandHandler("start", show_menu),
-                CallbackQueryHandler(check_sub_callback,  pattern="^check_sub$"),
-                CallbackQueryHandler(ask_for_username,    pattern="^by_username$"),
-                CallbackQueryHandler(ask_for_url,         pattern="^by_url$"),
-                CallbackQueryHandler(choose_lang_menu,    pattern="^lang_menu$"),
-                CallbackQueryHandler(show_subs,           pattern="^mysubs$"),
-                CallbackQueryHandler(ask_add_sub,         pattern="^add_sub$"),
-                CallbackQueryHandler(remove_sub,          pattern="^remove_sub_"),
-                CallbackQueryHandler(show_menu,           pattern="^back_menu$"),
+                CommandHandler("start", cmd_start),
+                CallbackQueryHandler(check_sub_callback, pattern="^check_sub$"),
+                CallbackQueryHandler(ask_for_username,   pattern="^by_username$"),
+                CallbackQueryHandler(ask_for_url,        pattern="^by_url$"),
+                CallbackQueryHandler(choose_lang_menu,   pattern="^lang_menu$"),
+                CallbackQueryHandler(show_menu,          pattern="^back_menu$"),
             ],
             WAITING_USERNAME: [
-                CommandHandler("start", show_menu),
+                CommandHandler("start", cmd_start),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, handle_username),
             ],
             WAITING_URL: [
-                CommandHandler("start", show_menu),
+                CommandHandler("start", cmd_start),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, handle_url),
             ],
             CHOOSING_LANG: [
-                CommandHandler("start", show_menu),
+                CommandHandler("start", cmd_start),
                 CallbackQueryHandler(save_lang,  pattern="^lang_(uz|ru|en)$"),
                 CallbackQueryHandler(show_menu,  pattern="^back_menu$"),
-            ],
-            WAITING_SUB_USERNAME: [
-                CommandHandler("start", show_menu),
-                MessageHandler(filters.TEXT & ~filters.COMMAND, handle_sub_username),
             ],
         },
         fallbacks=[
             CommandHandler("cancel",    cancel),
-            CommandHandler("start",     show_menu),
+            CommandHandler("start",     cmd_start),
             CommandHandler("stats",     stats_cmd),
             CommandHandler("users",     users_cmd),
             CommandHandler("broadcast", broadcast_cmd),
@@ -624,7 +566,6 @@ def main() -> None:
     application.add_handler(CallbackQueryHandler(admin_stats,          pattern="^adm_stats$"))
     application.add_handler(CallbackQueryHandler(admin_users,          pattern=r"^adm_users_\d+$"))
     application.add_handler(CallbackQueryHandler(admin_downloads,      pattern=r"^adm_dl_\d+$"))
-    application.add_handler(CallbackQueryHandler(admin_subs,           pattern="^adm_subs$"))
     application.add_handler(CallbackQueryHandler(admin_broadcast_menu, pattern="^adm_broadcast$"))
     application.add_handler(CallbackQueryHandler(lambda u, c: u.callback_query.answer(), pattern="^adm_noop$"))
     application.add_handler(
