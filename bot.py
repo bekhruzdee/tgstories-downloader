@@ -264,6 +264,8 @@ async def save_lang(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 # ── smart text router ────────────────────────────────────────────────────────
 
 async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    if context.user_data.get("awaiting_broadcast"):
+        return CHOOSING
     if "t.me/" in update.message.text:
         return await handle_url(update, context)
     return await handle_username(update, context)
