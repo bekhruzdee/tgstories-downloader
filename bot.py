@@ -189,7 +189,7 @@ async def handle_username(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     await database.log_download(user.id, username, "username")
 
     await msg.edit_text(
-        t(lang, "done_user", username=username, total=total),
+        f"✅ @{username} ning {total} ta storiysi yuborildi!",
         reply_markup=main_keyboard(user.id, lang),
     )
     return CHOOSING
@@ -238,7 +238,10 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
             os.remove(path)
 
     await database.log_download(user.id, f"{username}/s/{story_id}", "url")
-    await msg.edit_text(t(lang, "done_url"), reply_markup=main_keyboard(user.id, lang))
+    await msg.edit_text(
+        "✅ Story muvaffaqiyatli yuborildi!",
+        reply_markup=main_keyboard(user.id, lang),
+    )
     return CHOOSING
 
 # ── language selection ────────────────────────────────────────────────────────
