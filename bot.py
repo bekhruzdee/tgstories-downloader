@@ -29,13 +29,7 @@ CHOOSING, WAITING_USERNAME, WAITING_URL, CHOOSING_LANG = range(4)
 
 def main_keyboard(user_id: int, lang: str) -> InlineKeyboardMarkup:
     rows = [
-        [
-            InlineKeyboardButton(t(lang, "btn_username"), callback_data="by_username"),
-            InlineKeyboardButton(t(lang, "btn_url"),      callback_data="by_url"),
-        ],
-        [
-            InlineKeyboardButton(t(lang, "btn_lang_change"), callback_data="lang_menu"),
-        ],
+        [InlineKeyboardButton(t(lang, "btn_lang_change"), callback_data="lang_menu")],
     ]
     if user_id == ADMIN_ID:
         rows.append([InlineKeyboardButton("🔐 Admin panel", callback_data="adm_panel")])
@@ -123,7 +117,7 @@ async def show_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         await _send_or_edit(update, t(lang, "subscribe_required", channel=CHANNEL_USERNAME), kb)
         return CHOOSING
 
-    await _send_or_edit(update, t(lang, "choose_method"), main_keyboard(user.id, lang))
+    await _send_or_edit(update, t(lang, "send_prompt"), main_keyboard(user.id, lang))
     return CHOOSING
 
 
@@ -264,6 +258,13 @@ async def save_lang(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         t(new_lang, "choose_method"), reply_markup=main_keyboard(user_id, new_lang)
     )
     return CHOOSING
+
+# ── smart text router ────────────────────────────────────────────────────────
+
+async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    if "t.me/" in update.message.text:
+        return await handle_url(update, context)
+    return await handle_username(update, context)
 
 # ── cancel ────────────────────────────────────────────────────────────────────
 
@@ -525,10 +526,9 @@ def main() -> None:
             CHOOSING: [
                 CommandHandler("start", cmd_start),
                 CallbackQueryHandler(check_sub_callback, pattern="^check_sub$"),
-                CallbackQueryHandler(ask_for_username,   pattern="^by_username$"),
-                CallbackQueryHandler(ask_for_url,        pattern="^by_url$"),
                 CallbackQueryHandler(choose_lang_menu,   pattern="^lang_menu$"),
                 CallbackQueryHandler(show_menu,          pattern="^back_menu$"),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_input),
             ],
             WAITING_USERNAME: [
                 CommandHandler("start", cmd_start),

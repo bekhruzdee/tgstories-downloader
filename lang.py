@@ -32,6 +32,7 @@ TEXTS: dict = {
         "back": "⬅️ Orqaga",
         "try_again": "Boshqa harakat qiling:",
         "bad_url": "❌ Noto'g'ri URL format!\n\nMisol: https://t.me/durov/s/123",
+        "send_prompt": "👤 Username yoki 🔗 Story URL yuboring",
     },
     "ru": {
         "welcome": "👋 Привет! Бот для скачивания Telegram Stories.",
@@ -66,6 +67,7 @@ TEXTS: dict = {
         "back": "⬅️ Назад",
         "try_again": "Попробуйте снова:",
         "bad_url": "❌ Неверный формат URL!\n\nПример: https://t.me/durov/s/123",
+        "send_prompt": "👤 Отправьте username или 🔗 URL истории",
     },
     "en": {
         "welcome": "👋 Hello! Telegram Stories downloader bot.",
@@ -100,6 +102,7 @@ TEXTS: dict = {
         "back": "⬅️ Back",
         "try_again": "Try again:",
         "bad_url": "❌ Invalid URL format!\n\nExample: https://t.me/durov/s/123",
+        "send_prompt": "👤 Send username or 🔗 Story URL",
     },
 }
 
