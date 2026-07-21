@@ -69,7 +69,7 @@ async def _download_story(story, username: str, story_id: int) -> "tuple | None"
     if raw_media and hasattr(raw_media, "__dict__"):
         print(f"[DEBUG] _download_story: media.__dict__ = {raw_media.__dict__}")
 
-    # Approach 1: pass the story object directly to download_media
+    # Approach 1: pass the story object directly to download_media 1
     try:
         path = await app.download_media(story, file_name=f"stories/{username}_{story_id}")
         if path:
