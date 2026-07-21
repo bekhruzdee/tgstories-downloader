@@ -24,7 +24,7 @@ from userbot import app as userbot_client, get_story_by_id, get_user_stories
 
 log = logging.getLogger(__name__)
 
-CHOOSING, WAITING_USERNAME, WAITING_URL = range(3)
+CHOOSING = 0
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -71,12 +71,6 @@ async def show_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
 
 # ── download by username ──────────────────────────────────────────────────────
-
-async def ask_for_username(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    await update.callback_query.answer()
-    await update.callback_query.edit_message_text(t("enter_username"))
-    return WAITING_USERNAME
-
 
 async def handle_username(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     user = update.effective_user
@@ -127,11 +121,6 @@ async def handle_username(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     return CHOOSING
 
 # ── download by URL ───────────────────────────────────────────────────────────
-
-async def ask_for_url(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    await update.callback_query.answer()
-    await update.callback_query.edit_message_text(t("enter_url"))
-    return WAITING_URL
 
 
 async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -466,14 +455,6 @@ def main() -> None:
                 CommandHandler("start", cmd_start),
                 CallbackQueryHandler(show_menu, pattern="^back_menu$"),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_input),
-            ],
-            WAITING_USERNAME: [
-                CommandHandler("start", cmd_start),
-                MessageHandler(filters.TEXT & ~filters.COMMAND, handle_username),
-            ],
-            WAITING_URL: [
-                CommandHandler("start", cmd_start),
-                MessageHandler(filters.TEXT & ~filters.COMMAND, handle_url),
             ],
         },
         fallbacks=[
