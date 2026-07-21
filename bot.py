@@ -2,6 +2,8 @@ import asyncio
 import logging
 import os
 import re
+import time
+from datetime import datetime
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import RetryAfter
@@ -47,6 +49,31 @@ async def _send_or_edit(update: Update, text: str, keyboard=None) -> None:
     else:
         await update.message.reply_text(text, reply_markup=keyboard)
 
+
+async def _notify_admin(context: ContextTypes.DEFAULT_TYPE, user, request_text: str, *, error=None, total=None) -> None:
+    try:
+        now = datetime.now().strftime('%d.%m.%Y %H:%M')
+        uname = user.username or str(user.id)
+        if error is not None:
+            msg = (
+                f"⚠️ Error!\n"
+                f"👤 User: @{uname} ({user.id})\n"
+                f"🔍 Request: {request_text}\n"
+                f"❌ Error: {error}\n"
+                f"⏰ {now}"
+            )
+        else:
+            msg = (
+                f"✅ Downloaded!\n"
+                f"👤 User: @{uname} ({user.id})\n"
+                f"🔍 Request: {request_text}\n"
+                f"📦 {total} stories\n"
+                f"⏰ {now}"
+            )
+        await context.bot.send_message(chat_id=ADMIN_ID, text=msg)
+    except Exception:
+        pass
+
 # ── core menu ─────────────────────────────────────────────────────────────────
 
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -78,7 +105,8 @@ async def ask_for_username(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
 async def handle_username(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     user = update.effective_user
-    username = update.message.text.strip().lstrip("@")
+    text = update.message.text
+    username = text.strip().lstrip("@")
 
     msg = await update.message.reply_text(t("downloading"))
 
@@ -87,6 +115,7 @@ async def handle_username(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     except Exception as e:
         await msg.edit_text(f"❌ {e}")
         await update.message.reply_text(t("send_prompt"), reply_markup=main_keyboard(user.id))
+        await _notify_admin(context, user, text, error=str(e))
         return CHOOSING
 
     if not files:
@@ -115,9 +144,11 @@ async def handle_username(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 os.remove(leftover)
         await msg.edit_text(f"❌ {e}")
         await update.message.reply_text(t("send_prompt"), reply_markup=main_keyboard(user.id))
+        await _notify_admin(context, user, text, error=str(e))
         return CHOOSING
 
     await database.log_download(user.id, username, "username")
+    await _notify_admin(context, user, text, total=total)
 
     await msg.edit_text(t("done_user", username=username, total=total))
     await update.message.reply_text(t("send_prompt"), reply_markup=main_keyboard(user.id))
@@ -151,6 +182,7 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     except Exception as e:
         await msg.edit_text(f"❌ {e}")
         await update.message.reply_text(t("send_prompt"), reply_markup=main_keyboard(user.id))
+        await _notify_admin(context, user, url, error=str(e))
         return CHOOSING
 
     try:
@@ -164,12 +196,14 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     except Exception as e:
         await msg.edit_text(f"❌ {e}")
         await update.message.reply_text(t("send_prompt"), reply_markup=main_keyboard(user.id))
+        await _notify_admin(context, user, url, error=str(e))
         return CHOOSING
     finally:
         if os.path.exists(path):
             os.remove(path)
 
     await database.log_download(user.id, f"{username}/s/{story_id}", "url")
+    await _notify_admin(context, user, url, total=1)
     await msg.edit_text(t("done_url"))
     await update.message.reply_text(t("send_prompt"), reply_markup=main_keyboard(user.id))
     return CHOOSING
@@ -179,6 +213,18 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     if context.user_data.get("awaiting_broadcast"):
         return CHOOSING
+
+    user_id = update.effective_user.id
+    now = time.time()
+    rate = context.bot_data.setdefault("rate_limit", {})
+    timestamps = [ts for ts in rate.get(user_id, []) if now - ts < 60]
+    if len(timestamps) >= 3:
+        wait = int(60 - (now - timestamps[0]))
+        await update.message.reply_text(f"⏳ Too many requests! Please wait {wait} seconds.")
+        return CHOOSING
+    timestamps.append(now)
+    rate[user_id] = timestamps
+
     text = update.message.text
     print(f"[DEBUG] Received text: {text}")
     print(f"[DEBUG] Contains t.me: {'t.me/' in text}")
