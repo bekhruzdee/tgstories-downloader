@@ -1,5 +1,6 @@
 import logging
 import os
+import traceback
 
 from pyrogram import Client, types
 from pyrogram.raw.functions.stories import GetPeerStories, GetStoriesByID
@@ -57,6 +58,56 @@ async def _download_media(raw_media, username: str, story_id: int) -> "tuple | N
                     video, file_name=f"stories/{username}_{story_id}.mp4"
                 )
                 return ("video", path) if path else None
+
+    return None
+
+
+async def _download_story(story, username: str, story_id: int) -> "tuple | None":
+    """Try every known approach to download a single StoryItem."""
+    print(f"[DEBUG] _download_story: story.__dict__ = {story.__dict__}")
+    raw_media = getattr(story, "media", None)
+    print(f"[DEBUG] _download_story: media type = {type(raw_media).__name__}")
+    if raw_media and hasattr(raw_media, "__dict__"):
+        print(f"[DEBUG] _download_story: media.__dict__ = {raw_media.__dict__}")
+
+    # Approach 1: pass the story object directly to download_media
+    try:
+        path = await app.download_media(story, file_name=f"stories/{username}_{story_id}")
+        if path:
+            ext = os.path.splitext(path)[1].lower()
+            media_type = "video" if ext in (".mp4", ".mov", ".avi", ".mkv") else "photo"
+            print(f"[DEBUG] Approach 1 (direct story) succeeded: {path}")
+            return (media_type, path)
+        print("[DEBUG] Approach 1 returned None path")
+    except Exception as e:
+        print(f"[DEBUG] Approach 1 (direct story) failed: {e}")
+        traceback.print_exc()
+
+    # Approach 2: pass story.media directly to download_media
+    if raw_media is not None:
+        try:
+            path = await app.download_media(raw_media, file_name=f"stories/{username}_{story_id}")
+            if path:
+                ext = os.path.splitext(path)[1].lower()
+                media_type = "video" if ext in (".mp4", ".mov", ".avi", ".mkv") else "photo"
+                print(f"[DEBUG] Approach 2 (story.media direct) succeeded: {path}")
+                return (media_type, path)
+            print("[DEBUG] Approach 2 returned None path")
+        except Exception as e:
+            print(f"[DEBUG] Approach 2 (story.media direct) failed: {e}")
+            traceback.print_exc()
+
+    # Approach 3: typed conversion (MessageMediaPhoto / MessageMediaDocument)
+    if raw_media is not None:
+        try:
+            result = await _download_media(raw_media, username, story_id)
+            if result:
+                print(f"[DEBUG] Approach 3 (typed conversion) succeeded: {result}")
+                return result
+            print("[DEBUG] Approach 3 returned None")
+        except Exception as e:
+            print(f"[DEBUG] Approach 3 (typed conversion) failed: {e}")
+            traceback.print_exc()
 
     return None
 
@@ -161,11 +212,11 @@ async def get_story_by_id(username: str, story_id: int) -> tuple:
     if not story:
         raise Exception("Story topilmadi yoki o'chirilgan (yopiq yoki mavjud emas)!")
 
-    result = await _download_media(story.media, username, story_id)
+    result = await _download_story(story, username, story_id)
     if result:
         return result
 
-    raise Exception(f"Bu storyda yuklab bo'ladigan media yo'q ({type(story.media).__name__})!")
+    raise Exception(f"Bu storyda yuklab bo'ladigan media yo'q ({type(getattr(story, 'media', None)).__name__})!")
 
 
 async def get_story_ids(username: str) -> list[int]:
