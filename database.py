@@ -66,19 +66,6 @@ async def save_user(user_id: int, username: str | None, full_name: str) -> None:
     """, user_id, username, full_name)
 
 
-async def update_lang(user_id: int, lang: str) -> None:
-    pool = await _get_pool()
-    await pool.execute(
-        "UPDATE users SET lang = $1 WHERE user_id = $2", lang, user_id
-    )
-
-
-async def get_lang(user_id: int) -> str:
-    pool = await _get_pool()
-    row = await pool.fetchrow("SELECT lang FROM users WHERE user_id = $1", user_id)
-    return row[0] if row else "uz"
-
-
 async def log_download(user_id: int, target: str, type: str) -> None:
     pool = await _get_pool()
     await pool.execute(

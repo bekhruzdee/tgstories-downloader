@@ -23,43 +23,15 @@ from userbot import app as userbot_client, get_story_by_id, get_user_stories
 
 log = logging.getLogger(__name__)
 
-CHOOSING, WAITING_USERNAME, WAITING_URL, CHOOSING_LANG = range(4)
+CHOOSING, WAITING_USERNAME, WAITING_URL = range(3)
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 
-def main_keyboard(user_id: int, lang: str) -> InlineKeyboardMarkup:
-    rows = [
-        [InlineKeyboardButton(t(lang, "btn_lang_change"), callback_data="lang_menu")],
-    ]
+def main_keyboard(user_id: int) -> InlineKeyboardMarkup:
+    rows = []
     if user_id == ADMIN_ID:
         rows.append([InlineKeyboardButton("🔐 Admin panel", callback_data="adm_panel")])
     return InlineKeyboardMarkup(rows)
-
-
-def _lang_keyboard_first() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup([[
-        InlineKeyboardButton("🇺🇿 O'zbek",  callback_data="lang_uz"),
-        InlineKeyboardButton("🇷🇺 Русский", callback_data="lang_ru"),
-        InlineKeyboardButton("🇬🇧 English", callback_data="lang_en"),
-    ]])
-
-
-def _lang_keyboard_change(lang: str) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton("🇺🇿 O'zbek",  callback_data="lang_uz"),
-            InlineKeyboardButton("🇷🇺 Русский", callback_data="lang_ru"),
-            InlineKeyboardButton("🇬🇧 English", callback_data="lang_en"),
-        ],
-        [InlineKeyboardButton(t(lang, "back"), callback_data="back_menu")],
-    ])
-
-
-async def _user_exists(user_id: int) -> bool:
-    row = await database._pool.fetchrow(
-        "SELECT 1 FROM users WHERE user_id = $1", user_id
-    )
-    return row is not None
 
 
 def parse_story_url(url: str) -> tuple[str | None, int | None]:
@@ -88,73 +60,58 @@ async def _send_or_edit(update: Update, text: str, keyboard=None) -> None:
 # ── core menu ─────────────────────────────────────────────────────────────────
 
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    user = update.effective_user
-
-    if not await _user_exists(user.id):
-        # Save with default lang first so save_lang's update_lang has a row to update
-        await database.save_user(user.id, user.username, user.full_name)
-        await update.message.reply_text(
-            "🌍 Tilni tanlang / Выберите язык / Choose language:",
-            reply_markup=_lang_keyboard_first(),
-        )
-        return CHOOSING_LANG
-
     return await show_menu(update, context)
 
 
 async def show_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     user = update.effective_user
     await database.save_user(user.id, user.username, user.full_name)
-    lang = await database.get_lang(user.id)
 
     if update.callback_query:
         await update.callback_query.answer()
 
     if not await is_subscribed(context.bot, user.id):
         kb = InlineKeyboardMarkup([[
-            InlineKeyboardButton(t(lang, "btn_subscribed"), callback_data="check_sub")
+            InlineKeyboardButton(t("btn_subscribed"), callback_data="check_sub")
         ]])
-        await _send_or_edit(update, t(lang, "subscribe_required", channel=CHANNEL_USERNAME), kb)
+        await _send_or_edit(update, t("subscribe_required", channel=CHANNEL_USERNAME), kb)
         return CHOOSING
 
-    await _send_or_edit(update, t(lang, "send_prompt"), main_keyboard(user.id, lang))
+    await _send_or_edit(update, t("send_prompt"), main_keyboard(user.id))
     return CHOOSING
 
 
 async def check_sub_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     user_id = update.callback_query.from_user.id
-    lang = await database.get_lang(user_id)
     if await is_subscribed(context.bot, user_id):
         return await show_menu(update, context)
-    await update.callback_query.answer(t(lang, "subscribe_required", channel=CHANNEL_USERNAME)[:200], show_alert=True)
+    await update.callback_query.answer(t("subscribe_required", channel=CHANNEL_USERNAME)[:200], show_alert=True)
     return CHOOSING
 
 # ── download by username ──────────────────────────────────────────────────────
 
 async def ask_for_username(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    lang = await database.get_lang(update.callback_query.from_user.id)
     await update.callback_query.answer()
-    await update.callback_query.edit_message_text(t(lang, "enter_username"))
+    await update.callback_query.edit_message_text(t("enter_username"))
     return WAITING_USERNAME
 
 
 async def handle_username(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     user = update.effective_user
-    lang = await database.get_lang(user.id)
     username = update.message.text.strip().lstrip("@")
 
-    msg = await update.message.reply_text(t(lang, "downloading"))
+    msg = await update.message.reply_text(t("downloading"))
 
     try:
         files = await get_user_stories(username)
     except Exception as e:
         await msg.edit_text(f"❌ {e}")
-        await update.message.reply_text(t(lang, "send_prompt"), reply_markup=main_keyboard(user.id, lang))
+        await update.message.reply_text(t("send_prompt"), reply_markup=main_keyboard(user.id))
         return CHOOSING
 
     if not files:
-        await msg.edit_text(t(lang, "no_stories"))
-        await update.message.reply_text(t(lang, "send_prompt"), reply_markup=main_keyboard(user.id, lang))
+        await msg.edit_text(t("no_stories"))
+        await update.message.reply_text(t("send_prompt"), reply_markup=main_keyboard(user.id))
         return CHOOSING
 
     total = len(files)
@@ -162,7 +119,7 @@ async def handle_username(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     try:
         for i, (media_type, path) in enumerate(files, 1):
             try:
-                await msg.edit_text(t(lang, "sending", i=i, total=total))
+                await msg.edit_text(t("sending", i=i, total=total))
                 caption = f"{'🎬' if media_type == 'video' else '🖼'} @{username} — {i}/{total}"
                 with open(path, "rb") as f:
                     if media_type == "video":
@@ -177,48 +134,43 @@ async def handle_username(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             if os.path.exists(leftover):
                 os.remove(leftover)
         await msg.edit_text(f"❌ {e}")
-        await update.message.reply_text(t(lang, "send_prompt"), reply_markup=main_keyboard(user.id, lang))
+        await update.message.reply_text(t("send_prompt"), reply_markup=main_keyboard(user.id))
         return CHOOSING
 
     await database.log_download(user.id, username, "username")
 
-    await msg.edit_text(f"✅ @{username} ning {total} ta storiysi yuborildi!")
-    await update.message.reply_text(
-        t(lang, "send_prompt"),
-        reply_markup=main_keyboard(user.id, lang),
-    )
+    await msg.edit_text(t("done_user", username=username, total=total))
+    await update.message.reply_text(t("send_prompt"), reply_markup=main_keyboard(user.id))
     return CHOOSING
 
 # ── download by URL ───────────────────────────────────────────────────────────
 
 async def ask_for_url(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    lang = await database.get_lang(update.callback_query.from_user.id)
     await update.callback_query.answer()
-    await update.callback_query.edit_message_text(t(lang, "enter_url"))
+    await update.callback_query.edit_message_text(t("enter_url"))
     return WAITING_URL
 
 
 async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     user = update.effective_user
-    lang = await database.get_lang(user.id)
     username, story_id = parse_story_url(update.message.text)
 
     if not username or not story_id:
-        await update.message.reply_text(t(lang, "bad_url"))
-        await update.message.reply_text(t(lang, "send_prompt"), reply_markup=main_keyboard(user.id, lang))
+        await update.message.reply_text(t("bad_url"))
+        await update.message.reply_text(t("send_prompt"), reply_markup=main_keyboard(user.id))
         return CHOOSING
 
-    msg = await update.message.reply_text(t(lang, "downloading"))
+    msg = await update.message.reply_text(t("downloading"))
 
     try:
         media_type, path = await get_story_by_id(username, story_id)
     except Exception as e:
         await msg.edit_text(f"❌ {e}")
-        await update.message.reply_text(t(lang, "send_prompt"), reply_markup=main_keyboard(user.id, lang))
+        await update.message.reply_text(t("send_prompt"), reply_markup=main_keyboard(user.id))
         return CHOOSING
 
     try:
-        await msg.edit_text(t(lang, "sending", i=1, total=1))
+        await msg.edit_text(t("sending", i=1, total=1))
         caption = f"{'🎬' if media_type == 'video' else '🖼'} @{username}/s/{story_id}"
         with open(path, "rb") as f:
             if media_type == "video":
@@ -227,39 +179,15 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
                 await update.message.reply_photo(photo=f, caption=caption)
     except Exception as e:
         await msg.edit_text(f"❌ {e}")
-        await update.message.reply_text(t(lang, "send_prompt"), reply_markup=main_keyboard(user.id, lang))
+        await update.message.reply_text(t("send_prompt"), reply_markup=main_keyboard(user.id))
         return CHOOSING
     finally:
         if os.path.exists(path):
             os.remove(path)
 
     await database.log_download(user.id, f"{username}/s/{story_id}", "url")
-    await msg.edit_text("✅ Story muvaffaqiyatli yuborildi!")
-    await update.message.reply_text(
-        t(lang, "send_prompt"),
-        reply_markup=main_keyboard(user.id, lang),
-    )
-    return CHOOSING
-
-# ── language selection ────────────────────────────────────────────────────────
-
-async def choose_lang_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    lang = await database.get_lang(update.callback_query.from_user.id)
-    await update.callback_query.answer()
-    await update.callback_query.edit_message_text(
-        t(lang, "choose_lang"), reply_markup=_lang_keyboard_change(lang)
-    )
-    return CHOOSING_LANG
-
-
-async def save_lang(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    user_id = update.callback_query.from_user.id
-    new_lang = update.callback_query.data[len("lang_"):]   # "lang_uz" → "uz"
-    await database.update_lang(user_id, new_lang)
-    await update.callback_query.answer(t(new_lang, "lang_saved"), show_alert=True)
-    await update.callback_query.edit_message_text(
-        t(new_lang, "choose_method"), reply_markup=main_keyboard(user_id, new_lang)
-    )
+    await msg.edit_text(t("done_url"))
+    await update.message.reply_text(t("send_prompt"), reply_markup=main_keyboard(user.id))
     return CHOOSING
 
 # ── smart text router ────────────────────────────────────────────────────────
@@ -275,9 +203,8 @@ async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     user_id = update.effective_user.id
-    lang = await database.get_lang(user_id)
-    await update.message.reply_text(t(lang, "cancelled"))
-    await update.message.reply_text(t(lang, "send_prompt"), reply_markup=main_keyboard(user_id, lang))
+    await update.message.reply_text(t("cancelled"))
+    await update.message.reply_text(t("send_prompt"), reply_markup=main_keyboard(user_id))
     return CHOOSING
 
 # ── admin commands ────────────────────────────────────────────────────────────
@@ -507,8 +434,7 @@ async def handle_admin_broadcast(update: Update, context: ContextTypes.DEFAULT_T
 
     await progress_msg.edit_text(f"✅ Yuborildi: {sent} | ❌ Xato: {failed}")
     user_id = update.effective_user.id
-    lang = await database.get_lang(user_id)
-    await update.effective_message.reply_text(t(lang, "send_prompt"), reply_markup=main_keyboard(user_id, lang))
+    await update.effective_message.reply_text(t("send_prompt"), reply_markup=main_keyboard(user_id))
 
 # ── lifecycle ─────────────────────────────────────────────────────────────────
 
@@ -535,7 +461,6 @@ def main() -> None:
             CHOOSING: [
                 CommandHandler("start", cmd_start),
                 CallbackQueryHandler(check_sub_callback, pattern="^check_sub$"),
-                CallbackQueryHandler(choose_lang_menu,   pattern="^lang_menu$"),
                 CallbackQueryHandler(show_menu,          pattern="^back_menu$"),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_input),
             ],
@@ -546,11 +471,6 @@ def main() -> None:
             WAITING_URL: [
                 CommandHandler("start", cmd_start),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, handle_url),
-            ],
-            CHOOSING_LANG: [
-                CommandHandler("start", cmd_start),
-                CallbackQueryHandler(save_lang,  pattern="^lang_(uz|ru|en)$"),
-                CallbackQueryHandler(show_menu,  pattern="^back_menu$"),
             ],
         },
         fallbacks=[
