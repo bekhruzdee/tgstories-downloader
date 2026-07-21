@@ -16,7 +16,7 @@ from telegram.ext import (
 )
 
 import database
-from config import ADMIN_ID, BOT_TOKEN, CHANNEL_USERNAME
+from config import ADMIN_ID, BOT_TOKEN
 from lang import t
 from scheduler import start_scheduler, stop_scheduler
 from userbot import app as userbot_client, get_story_by_id, get_user_stories
@@ -41,16 +41,6 @@ def parse_story_url(url: str) -> tuple[str | None, int | None]:
     return None, None
 
 
-async def is_subscribed(bot, user_id: int) -> bool:
-    if not CHANNEL_USERNAME:
-        return True
-    try:
-        member = await bot.get_chat_member(CHANNEL_USERNAME, user_id)
-        return member.status not in ("left", "kicked", "banned")
-    except Exception:
-        return True
-
-
 async def _send_or_edit(update: Update, text: str, keyboard=None) -> None:
     if update.callback_query:
         await update.callback_query.edit_message_text(text, reply_markup=keyboard)
@@ -70,23 +60,9 @@ async def show_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     if update.callback_query:
         await update.callback_query.answer()
 
-    if not await is_subscribed(context.bot, user.id):
-        kb = InlineKeyboardMarkup([[
-            InlineKeyboardButton(t("btn_subscribed"), callback_data="check_sub")
-        ]])
-        await _send_or_edit(update, t("subscribe_required", channel=CHANNEL_USERNAME), kb)
-        return CHOOSING
-
     await _send_or_edit(update, t("send_prompt"), main_keyboard(user.id))
     return CHOOSING
 
-
-async def check_sub_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    user_id = update.callback_query.from_user.id
-    if await is_subscribed(context.bot, user_id):
-        return await show_menu(update, context)
-    await update.callback_query.answer(t("subscribe_required", channel=CHANNEL_USERNAME)[:200], show_alert=True)
-    return CHOOSING
 
 # ── download by username ──────────────────────────────────────────────────────
 
@@ -460,8 +436,7 @@ def main() -> None:
         states={
             CHOOSING: [
                 CommandHandler("start", cmd_start),
-                CallbackQueryHandler(check_sub_callback, pattern="^check_sub$"),
-                CallbackQueryHandler(show_menu,          pattern="^back_menu$"),
+                CallbackQueryHandler(show_menu, pattern="^back_menu$"),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_input),
             ],
             WAITING_USERNAME: [
