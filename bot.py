@@ -50,6 +50,7 @@ async def _send_or_edit(update: Update, text: str, keyboard=None) -> None:
 # ── core menu ─────────────────────────────────────────────────────────────────
 
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    await update.message.reply_text(t("welcome"), parse_mode="Markdown")
     return await show_menu(update, context)
 
 
