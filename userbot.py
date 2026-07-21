@@ -134,6 +134,7 @@ async def get_user_stories(username: str) -> list:
 
 async def get_story_by_id(username: str, story_id: int) -> tuple:
     os.makedirs("stories", exist_ok=True)
+    print(f"[DEBUG] get_story_by_id called: username={username}, story_id={story_id}")
 
     try:
         peer = await app.resolve_peer(username)
@@ -153,6 +154,10 @@ async def get_story_by_id(username: str, story_id: int) -> tuple:
         print(f"[DEBUG]   {type(s).__name__} id={s.id}")
 
     story = next((s for s in r.stories if isinstance(s, StoryItem)), None)
+    print(f"[DEBUG] Story result: {story}")
+    print(f"[DEBUG] Story type: {type(story)}")
+    if story:
+        print(f"[DEBUG] Story attributes: {dir(story)}")
     if not story:
         raise Exception("Story topilmadi yoki o'chirilgan (yopiq yoki mavjud emas)!")
 

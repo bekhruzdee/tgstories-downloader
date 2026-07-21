@@ -180,6 +180,8 @@ async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     if context.user_data.get("awaiting_broadcast"):
         return CHOOSING
     text = update.message.text
+    print(f"[DEBUG] Received text: {text}")
+    print(f"[DEBUG] Contains t.me: {'t.me/' in text}")
     if "t.me/" in text:
         print(f"[DEBUG] URL detected: {text}")
         return await handle_url(update, context)
