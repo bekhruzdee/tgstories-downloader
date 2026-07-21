@@ -50,8 +50,11 @@ async def _send_or_edit(update: Update, text: str, keyboard=None) -> None:
 # ── core menu ─────────────────────────────────────────────────────────────────
 
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    user = update.effective_user
+    await database.save_user(user.id, user.username, user.full_name)
     await update.message.reply_text(t("welcome"), parse_mode="Markdown")
-    return await show_menu(update, context)
+    await update.message.reply_text(t("send_prompt"), reply_markup=main_keyboard(user.id))
+    return CHOOSING
 
 
 async def show_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -130,7 +133,10 @@ async def ask_for_url(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
 
 async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     user = update.effective_user
-    username, story_id = parse_story_url(update.message.text)
+    url = update.message.text
+    print(f"[DEBUG] handle_url called with: {url}")
+    username, story_id = parse_story_url(url)
+    print(f"[DEBUG] Parsed username={username}, story_id={story_id}")
 
     if not username or not story_id:
         await update.message.reply_text(t("bad_url"))
@@ -138,6 +144,7 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         return CHOOSING
 
     msg = await update.message.reply_text(t("downloading"))
+
 
     try:
         media_type, path = await get_story_by_id(username, story_id)
@@ -172,8 +179,11 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     if context.user_data.get("awaiting_broadcast"):
         return CHOOSING
-    if "t.me/" in update.message.text:
+    text = update.message.text
+    if "t.me/" in text:
+        print(f"[DEBUG] URL detected: {text}")
         return await handle_url(update, context)
+    print(f"[DEBUG] Username detected: {text}")
     return await handle_username(update, context)
 
 # ── cancel ────────────────────────────────────────────────────────────────────
