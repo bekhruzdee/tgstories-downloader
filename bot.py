@@ -170,6 +170,7 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
 async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     if context.user_data.get("awaiting_broadcast"):
+        await handle_admin_broadcast(update, context)
         return CHOOSING
 
     user_id = update.effective_user.id
@@ -484,10 +485,6 @@ def main() -> None:
     application.add_handler(CallbackQueryHandler(admin_downloads,      pattern=r"^adm_dl_\d+$"))
     application.add_handler(CallbackQueryHandler(admin_broadcast_menu, pattern="^adm_broadcast$"))
     application.add_handler(CallbackQueryHandler(lambda u, c: u.callback_query.answer(), pattern="^adm_noop$"))
-    application.add_handler(
-        MessageHandler(filters.ALL & filters.User(ADMIN_ID), handle_admin_broadcast),
-        group=1,
-    )
 
     print("Bot ishga tushdi!")
     application.run_polling()
