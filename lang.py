@@ -1,13 +1,15 @@
 TEXTS: dict = {
     "welcome": (
         "🎬 *Tg Stories Downloader*\n\n"
-        "Download Telegram users' stories easily!\n\n"
+        "Download Telegram users' stories and Instagram content!\n\n"
         "📌 *How to use:*\n"
         "• *Username* — download currently visible stories (last 24 hours)\n"
-        "• *URL* — download one specific story\n\n"
+        "• *Telegram URL* — download one specific story\n"
+        "• *Instagram URL* — download Instagram reels and photos\n\n"
         "💡 *Example:*\n"
         "username: `@durov`\n"
-        "URL: `https://t.me/durov/s/123`\n\n"
+        "Telegram URL: `https://t.me/durov/s/123`\n"
+        "Instagram: `https://www.instagram.com/p/xxx`\n\n"
         "⚠️ Only works with public profiles!\n"
         "⏳ Stories disappear after 24 hours"
     ),

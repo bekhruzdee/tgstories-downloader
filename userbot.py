@@ -1,6 +1,9 @@
 import logging
 import os
+import time
 import traceback
+
+import requests
 
 from pyrogram import Client, types
 from pyrogram.raw.functions.stories import GetPeerStories, GetStoriesByID
@@ -252,21 +255,38 @@ async def download_yt_or_insta(url: str) -> tuple:
             'preferedformat': 'mp4',
         }],
     }
-    with _yt_dlp.YoutubeDL(opts) as ydl:
-        info = ydl.extract_info(url, download=True)
-        video_id = info.get('id') or info.get('webpage_url_basename', 'video')
-        def _typed(path: str) -> tuple:
-            ext = os.path.splitext(path)[1].lower()
-            media_type = "photo" if ext in ('.jpg', '.jpeg', '.png', '.webp') else "video"
-            return (media_type, path)
+    def _typed(path: str) -> tuple:
+        ext = os.path.splitext(path)[1].lower()
+        media_type = "photo" if ext in ('.jpg', '.jpeg', '.png', '.webp') else "video"
+        return (media_type, path)
 
-        direct = ydl.prepare_filename(info)
-        if os.path.exists(direct):
-            return _typed(direct)
-        files = glob.glob(f"downloads/{video_id}.*")
-        if files:
-            return _typed(files[0])
-        files = sorted(glob.glob("downloads/*"), key=os.path.getmtime, reverse=True)
-        if files:
-            return _typed(files[0])
-        raise Exception("File not found after download")
+    try:
+        with _yt_dlp.YoutubeDL(opts) as ydl:
+            info = ydl.extract_info(url, download=True)
+            video_id = info.get('id') or info.get('webpage_url_basename', 'video')
+            direct = ydl.prepare_filename(info)
+            if os.path.exists(direct):
+                return _typed(direct)
+            files = glob.glob(f"downloads/{video_id}.*")
+            if files:
+                return _typed(files[0])
+            files = sorted(glob.glob("downloads/*"), key=os.path.getmtime, reverse=True)
+            if files:
+                return _typed(files[0])
+            raise Exception("File not found after download")
+    except Exception as e:
+        error_msg = str(e).lower()
+        if "no video" in error_msg or "empty media" in error_msg:
+            try:
+                with _yt_dlp.YoutubeDL({'quiet': True, 'skip_download': True, 'cookiefile': '/root/tgstories-downloader/cookies.txt'}) as ydl:
+                    info = ydl.extract_info(url, download=False)
+                    thumbnail = info.get('thumbnail') or info.get('url')
+                    if thumbnail:
+                        r = requests.get(thumbnail, headers={'User-Agent': 'Mozilla/5.0'})
+                        path = f"downloads/insta_photo_{int(time.time())}.jpg"
+                        with open(path, 'wb') as f:
+                            f.write(r.content)
+                        return ("photo", path)
+            except Exception as e2:
+                print(f"[DEBUG] Photo fallback failed: {e2}")
+        raise Exception(f"Yuklab bo'lmadi: {e}")
