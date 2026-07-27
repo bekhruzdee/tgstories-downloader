@@ -227,3 +227,23 @@ async def get_story_ids(username: str) -> list[int]:
     except Exception as e:
         log.warning("get_story_ids(%s): %s: %s", username, type(e).__name__, e)
         return []
+
+
+import yt_dlp as _yt_dlp
+import glob
+
+
+async def download_yt_or_insta(url: str) -> tuple:
+    os.makedirs("downloads", exist_ok=True)
+    opts = {
+        'outtmpl': 'downloads/%(id)s.%(ext)s',
+        'format': 'best[filesize<50M]/best',
+        'quiet': True,
+        'merge_output_format': 'mp4',
+    }
+    with _yt_dlp.YoutubeDL(opts) as ydl:
+        info = ydl.extract_info(url, download=True)
+        files = glob.glob(f"downloads/{info['id']}.*")
+        if files:
+            return ("video", files[0])
+        raise Exception("File not found")

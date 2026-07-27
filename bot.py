@@ -20,7 +20,7 @@ import database
 from config import ADMIN_ID, BOT_TOKEN
 from lang import t
 from scheduler import start_scheduler, stop_scheduler
-from userbot import app as userbot_client, get_story_by_id, get_user_stories
+from userbot import app as userbot_client, get_story_by_id, get_user_stories, download_yt_or_insta
 
 log = logging.getLogger(__name__)
 
@@ -196,12 +196,31 @@ async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
     text = update.message.text
     print(f"[DEBUG] Received text: {text}")
+    if any(x in text for x in ["youtube.com", "youtu.be", "instagram.com", "tiktok.com"]):
+        return await handle_yt_insta(update, context)
     print(f"[DEBUG] Contains t.me: {'t.me/' in text}")
     if "t.me/" in text:
         print(f"[DEBUG] URL detected: {text}")
         return await handle_url(update, context)
     print(f"[DEBUG] Username detected: {text}")
     return await handle_username(update, context)
+
+async def handle_yt_insta(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    user = update.effective_user
+    url = update.message.text.strip()
+    msg = await update.message.reply_text("⏳ Downloading...")
+    try:
+        media_type, path = await asyncio.get_event_loop().run_in_executor(
+            None, lambda: asyncio.run(download_yt_or_insta(url))
+        )
+        await msg.edit_text("📤 Sending...")
+        with open(path, "rb") as f:
+            await update.message.reply_video(video=f, caption=f"🎬 {url[:50]}")
+        os.remove(path)
+    except Exception as e:
+        await msg.edit_text(f"❌ {e}")
+    await update.message.reply_text(t("send_prompt"), reply_markup=main_keyboard(user.id))
+    return CHOOSING
 
 # ── cancel ────────────────────────────────────────────────────────────────────
 
