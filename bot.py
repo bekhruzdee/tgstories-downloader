@@ -218,7 +218,14 @@ async def handle_yt_insta(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             await update.message.reply_video(video=f, caption=f"🎬 {url[:50]}")
         os.remove(path)
     except Exception as e:
-        await msg.edit_text(f"❌ {e}")
+        error_msg = str(e).lower()
+        if any(x in error_msg for x in ["no video", "no video formats", "empty media", "photo"]):
+            await msg.edit_text(
+                "📸 Instagram photos cannot be downloaded.\n"
+                "✅ Only Instagram videos and reels work!"
+            )
+        else:
+            await msg.edit_text(f"❌ {e}")
     await update.message.reply_text(t("send_prompt"), reply_markup=main_keyboard(user.id))
     return CHOOSING
 
