@@ -237,13 +237,35 @@ async def download_yt_or_insta(url: str) -> tuple:
     os.makedirs("downloads", exist_ok=True)
     opts = {
         'outtmpl': 'downloads/%(id)s.%(ext)s',
-        'format': 'best[filesize<50M]/best',
+        'format': 'best[filesize<50M]/best/bestvideo+bestaudio',
         'quiet': True,
         'merge_output_format': 'mp4',
+        'extractor_args': {
+            'youtube': {'player_client': ['android']},
+        },
+        'http_headers': {
+            'User-Agent': 'Mozilla/5.0 (Linux; Android 11; Pixel 5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.91 Mobile Safari/537.36',
+        },
+        'postprocessors': [{
+            'key': 'FFmpegVideoConvertor',
+            'preferedformat': 'mp4',
+        }],
     }
     with _yt_dlp.YoutubeDL(opts) as ydl:
         info = ydl.extract_info(url, download=True)
-        files = glob.glob(f"downloads/{info['id']}.*")
+        video_id = info.get('id') or info.get('webpage_url_basename', 'video')
+        def _typed(path: str) -> tuple:
+            ext = os.path.splitext(path)[1].lower()
+            media_type = "photo" if ext in ('.jpg', '.jpeg', '.png', '.webp') else "video"
+            return (media_type, path)
+
+        direct = ydl.prepare_filename(info)
+        if os.path.exists(direct):
+            return _typed(direct)
+        files = glob.glob(f"downloads/{video_id}.*")
         if files:
-            return ("video", files[0])
-        raise Exception("File not found")
+            return _typed(files[0])
+        files = sorted(glob.glob("downloads/*"), key=os.path.getmtime, reverse=True)
+        if files:
+            return _typed(files[0])
+        raise Exception("File not found after download")
