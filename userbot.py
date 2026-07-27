@@ -276,17 +276,30 @@ async def download_yt_or_insta(url: str) -> tuple:
             raise Exception("File not found after download")
     except Exception as e:
         error_msg = str(e).lower()
-        if "no video" in error_msg or "empty media" in error_msg:
+        if any(x in error_msg for x in ["no video", "empty media", "no video formats"]):
             try:
-                with _yt_dlp.YoutubeDL({'quiet': True, 'skip_download': True, 'cookiefile': '/root/tgstories-downloader/cookies.txt'}) as ydl:
-                    info = ydl.extract_info(url, download=False)
-                    thumbnail = info.get('thumbnail') or info.get('url')
-                    if thumbnail:
-                        r = requests.get(thumbnail, headers={'User-Agent': 'Mozilla/5.0'})
+                info_opts = {
+                    'quiet': True,
+                    'skip_download': True,
+                    'cookiefile': '/root/tgstories-downloader/cookies.txt',
+                }
+                with _yt_dlp.YoutubeDL(info_opts) as ydl2:
+                    info = ydl2.extract_info(url, download=False)
+                    thumbnails = info.get('thumbnails', [])
+                    thumb_url = None
+                    if thumbnails:
+                        thumb_url = thumbnails[-1].get('url')
+                    if not thumb_url:
+                        thumb_url = info.get('thumbnail')
+                    if thumb_url:
+                        r = requests.get(thumb_url, headers={
+                            'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15'
+                        }, timeout=30)
                         path = f"downloads/insta_photo_{int(time.time())}.jpg"
                         with open(path, 'wb') as f:
                             f.write(r.content)
-                        return ("photo", path)
+                        if os.path.getsize(path) > 1000:
+                            return ("photo", path)
             except Exception as e2:
                 print(f"[DEBUG] Photo fallback failed: {e2}")
         raise Exception(f"Yuklab bo'lmadi: {e}")
