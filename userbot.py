@@ -240,7 +240,7 @@ async def download_yt_or_insta(url: str) -> tuple:
     os.makedirs("downloads", exist_ok=True)
     opts = {
         'outtmpl': 'downloads/%(id)s.%(ext)s',
-        'format': 'best[filesize<50M]/best/bestvideo+bestaudio',
+        'format': 'best',
         'quiet': True,
         'merge_output_format': 'mp4',
         'extractor_args': {
@@ -250,10 +250,6 @@ async def download_yt_or_insta(url: str) -> tuple:
             'User-Agent': 'Mozilla/5.0 (Linux; Android 11; Pixel 5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.91 Mobile Safari/537.36',
         },
         'cookiefile': '/root/tgstories-downloader/cookies.txt',
-        'postprocessors': [{
-            'key': 'FFmpegVideoConvertor',
-            'preferedformat': 'mp4',
-        }],
     }
     def _typed(path: str) -> tuple:
         ext = os.path.splitext(path)[1].lower()
