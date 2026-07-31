@@ -253,12 +253,13 @@ async def handle_yt_insta(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     url = update.message.text.strip()
     msg = await update.message.reply_text("⏳ Downloading...")
     try:
-        media_type, path = await asyncio.get_event_loop().run_in_executor(
-            None, lambda: asyncio.run(download_yt_or_insta(url))
-        )
+        media_type, path = await download_yt_or_insta(url)
         await msg.edit_text("📤 Sending...")
         with open(path, "rb") as f:
-            await update.message.reply_video(video=f, caption=f"🎬 {url[:50]}")
+            if media_type == "video":
+                await update.message.reply_video(video=f, caption=f"🎬 {url[:50]}")
+            else:
+                await update.message.reply_photo(photo=f, caption=f"🖼 {url[:50]}")
         os.remove(path)
     except Exception as e:
         error_msg = str(e).lower()
