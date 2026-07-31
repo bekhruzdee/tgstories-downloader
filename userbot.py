@@ -242,7 +242,6 @@ async def download_yt_or_insta(url: str) -> tuple:
         'outtmpl': 'downloads/%(id)s.%(ext)s',
         'format': 'best',
         'quiet': True,
-        'merge_output_format': 'mp4',
         'extractor_args': {
             'youtube': {'player_client': ['android']},
         },
