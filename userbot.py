@@ -3,7 +3,6 @@ import os
 import time
 import traceback
 
-import requests
 
 from pyrogram import Client, types
 from pyrogram.raw.functions.stories import GetPeerStories, GetStoriesByID
@@ -253,7 +252,6 @@ async def download_yt_or_insta(url: str) -> tuple:
         "http_headers": {
             "User-Agent": "Mozilla/5.0 (Linux; Android 11; Pixel 5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.91 Mobile Safari/537.36",
         },
-        "cookiefile": "/root/tgstories-downloader/cookies.txt",
     }
 
     def _typed(path: str) -> tuple:
