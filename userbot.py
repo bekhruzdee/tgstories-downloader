@@ -254,9 +254,14 @@ async def download_yt_or_insta(url: str) -> tuple:
 
     if "vkvideo.ru" in url or "vk.com" in url:
         proc = await asyncio.create_subprocess_exec(
-            "yt-dlp", url,
-            "-o", "downloads/%(id)s.%(ext)s",
-            "--print", "after_move:filepath",
+            "yt-dlp",
+            url,
+            "-o",
+            "downloads/%(id)s.%(ext)s",
+            "--concurrent-fragments",
+            "4",
+            "--print",
+            "after_move:filepath",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
