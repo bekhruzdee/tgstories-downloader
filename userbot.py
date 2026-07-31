@@ -258,8 +258,6 @@ async def download_yt_or_insta(url: str) -> tuple:
             url,
             "-o",
             "downloads/%(id)s.%(ext)s",
-            "--concurrent-fragments",
-            "4",
             "--print",
             "after_move:filepath",
             stdout=asyncio.subprocess.PIPE,
