@@ -50,17 +50,26 @@ async def _check_subscriptions() -> None:
                         else:
                             await _bot.send_photo(user_id, f, caption=caption)
                 except Exception as e:
-                    log.error("Scheduler: failed to send story %s/%s to %s: %s",
-                              username, story_id, user_id, e)
+                    log.error(
+                        "Scheduler: failed to send story %s/%s to %s: %s",
+                        username,
+                        story_id,
+                        user_id,
+                        e,
+                    )
                 finally:
                     if path and os.path.exists(path):
                         os.remove(path)
 
         except Exception as e:
-            log.error("Scheduler: error processing sub %s for user %s: %s",
-                      username, user_id, e)
+            log.error(
+                "Scheduler: error processing sub %s for user %s: %s",
+                username,
+                user_id,
+                e,
+            )
 
-        await asyncio.sleep(0.3)   # avoid flood between users
+        await asyncio.sleep(0.3)  # avoid flood between users
 
 
 def start_scheduler(bot) -> None:

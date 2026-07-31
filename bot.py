@@ -20,13 +20,19 @@ import database
 from config import ADMIN_ID, BOT_TOKEN
 from lang import t
 from scheduler import start_scheduler, stop_scheduler
-from userbot import app as userbot_client, get_story_by_id, get_user_stories, download_yt_or_insta
+from userbot import (
+    app as userbot_client,
+    get_story_by_id,
+    get_user_stories,
+    download_yt_or_insta,
+)
 
 log = logging.getLogger(__name__)
 
 CHOOSING, WAITING_USERNAME, WAITING_URL = range(3)
 
 # ── helpers ───────────────────────────────────────────────────────────────────
+
 
 def main_keyboard(user_id: int) -> InlineKeyboardMarkup:
     rows = []
@@ -36,7 +42,7 @@ def main_keyboard(user_id: int) -> InlineKeyboardMarkup:
 
 
 def parse_story_url(url: str) -> tuple[str | None, int | None]:
-    match = re.search(r'(?:https?://)?t\.me/([^/\s]+)/s/(\d+)', url.strip())
+    match = re.search(r"(?:https?://)?t\.me/([^/\s]+)/s/(\d+)", url.strip())
     if match:
         return match.group(1), int(match.group(2))
     return None, None
@@ -51,11 +57,14 @@ async def _send_or_edit(update: Update, text: str, keyboard=None) -> None:
 
 # ── core menu ─────────────────────────────────────────────────────────────────
 
+
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     user = update.effective_user
     await database.save_user(user.id, user.username, user.full_name)
     await update.message.reply_text(t("welcome"), parse_mode="Markdown")
-    await update.message.reply_text(t("send_prompt"), reply_markup=main_keyboard(user.id))
+    await update.message.reply_text(
+        t("send_prompt"), reply_markup=main_keyboard(user.id)
+    )
     return CHOOSING
 
 
@@ -71,6 +80,7 @@ async def show_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
 
 # ── download by username ──────────────────────────────────────────────────────
+
 
 async def ask_for_username(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     await update.callback_query.answer()
@@ -89,12 +99,16 @@ async def handle_username(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         files = await get_user_stories(username)
     except Exception as e:
         await msg.edit_text(f"❌ {e}")
-        await update.message.reply_text(t("send_prompt"), reply_markup=main_keyboard(user.id))
+        await update.message.reply_text(
+            t("send_prompt"), reply_markup=main_keyboard(user.id)
+        )
         return CHOOSING
 
     if not files:
         await msg.edit_text(t("no_stories"))
-        await update.message.reply_text(t("send_prompt"), reply_markup=main_keyboard(user.id))
+        await update.message.reply_text(
+            t("send_prompt"), reply_markup=main_keyboard(user.id)
+        )
         return CHOOSING
 
     total = len(files)
@@ -117,16 +131,22 @@ async def handle_username(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             if os.path.exists(leftover):
                 os.remove(leftover)
         await msg.edit_text(f"❌ {e}")
-        await update.message.reply_text(t("send_prompt"), reply_markup=main_keyboard(user.id))
+        await update.message.reply_text(
+            t("send_prompt"), reply_markup=main_keyboard(user.id)
+        )
         return CHOOSING
 
     await database.log_download(user.id, username, "username")
 
     await msg.edit_text(t("done_user", username=username, total=total))
-    await update.message.reply_text(t("send_prompt"), reply_markup=main_keyboard(user.id))
+    await update.message.reply_text(
+        t("send_prompt"), reply_markup=main_keyboard(user.id)
+    )
     return CHOOSING
 
+
 # ── download by URL ───────────────────────────────────────────────────────────
+
 
 async def ask_for_url(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     await update.callback_query.answer()
@@ -143,17 +163,20 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
     if not username or not story_id:
         await update.message.reply_text(t("bad_url"))
-        await update.message.reply_text(t("send_prompt"), reply_markup=main_keyboard(user.id))
+        await update.message.reply_text(
+            t("send_prompt"), reply_markup=main_keyboard(user.id)
+        )
         return CHOOSING
 
     msg = await update.message.reply_text(t("downloading"))
-
 
     try:
         media_type, path = await get_story_by_id(username, story_id)
     except Exception as e:
         await msg.edit_text(f"❌ {e}")
-        await update.message.reply_text(t("send_prompt"), reply_markup=main_keyboard(user.id))
+        await update.message.reply_text(
+            t("send_prompt"), reply_markup=main_keyboard(user.id)
+        )
         return CHOOSING
 
     try:
@@ -166,7 +189,9 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
                 await update.message.reply_photo(photo=f, caption=caption)
     except Exception as e:
         await msg.edit_text(f"❌ {e}")
-        await update.message.reply_text(t("send_prompt"), reply_markup=main_keyboard(user.id))
+        await update.message.reply_text(
+            t("send_prompt"), reply_markup=main_keyboard(user.id)
+        )
         return CHOOSING
     finally:
         if os.path.exists(path):
@@ -174,10 +199,14 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
     await database.log_download(user.id, f"{username}/s/{story_id}", "url")
     await msg.edit_text(t("done_url"))
-    await update.message.reply_text(t("send_prompt"), reply_markup=main_keyboard(user.id))
+    await update.message.reply_text(
+        t("send_prompt"), reply_markup=main_keyboard(user.id)
+    )
     return CHOOSING
 
+
 # ── smart text router ────────────────────────────────────────────────────────
+
 
 async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     if context.user_data.get("awaiting_broadcast"):
@@ -189,14 +218,27 @@ async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     timestamps = [ts for ts in rate.get(user_id, []) if now - ts < 60]
     if len(timestamps) >= 3:
         wait = int(60 - (now - timestamps[0]))
-        await update.message.reply_text(f"⏳ Too many requests! Please wait {wait} seconds.")
+        await update.message.reply_text(
+            f"⏳ Too many requests! Please wait {wait} seconds."
+        )
         return CHOOSING
     timestamps.append(now)
     rate[user_id] = timestamps
 
     text = update.message.text
     print(f"[DEBUG] Received text: {text}")
-    if any(x in text for x in ["instagram.com", "twitter.com", "x.com", "facebook.com", "fb.watch", "vk.com", "vkvideo.ru"]):
+    if any(
+        x in text
+        for x in [
+            "instagram.com",
+            "twitter.com",
+            "x.com",
+            "facebook.com",
+            "fb.watch",
+            "vk.com",
+            "vkvideo.ru",
+        ]
+    ):
         return await handle_yt_insta(update, context)
     print(f"[DEBUG] Contains t.me: {'t.me/' in text}")
     if "t.me/" in text:
@@ -204,6 +246,7 @@ async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         return await handle_url(update, context)
     print(f"[DEBUG] Username detected: {text}")
     return await handle_username(update, context)
+
 
 async def handle_yt_insta(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     user = update.effective_user
@@ -219,25 +262,36 @@ async def handle_yt_insta(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         os.remove(path)
     except Exception as e:
         error_msg = str(e).lower()
-        if any(x in error_msg for x in ["no video", "no video formats", "empty media", "photo"]):
+        if any(
+            x in error_msg
+            for x in ["no video", "no video formats", "empty media", "photo"]
+        ):
             await msg.edit_text(
                 "📸 Instagram photos cannot be downloaded.\n"
                 "✅ Only Instagram videos and reels work!"
             )
         else:
             await msg.edit_text(f"❌ {e}")
-    await update.message.reply_text(t("send_prompt"), reply_markup=main_keyboard(user.id))
+    await update.message.reply_text(
+        t("send_prompt"), reply_markup=main_keyboard(user.id)
+    )
     return CHOOSING
 
+
 # ── cancel ────────────────────────────────────────────────────────────────────
+
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     user_id = update.effective_user.id
     await update.message.reply_text(t("cancelled"))
-    await update.message.reply_text(t("send_prompt"), reply_markup=main_keyboard(user_id))
+    await update.message.reply_text(
+        t("send_prompt"), reply_markup=main_keyboard(user_id)
+    )
     return CHOOSING
 
+
 # ── admin commands ────────────────────────────────────────────────────────────
+
 
 async def stats_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     if update.effective_user.id != ADMIN_ID:
@@ -310,21 +364,27 @@ async def broadcast_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     asyncio.create_task(_do_broadcast(context.bot, text, user_ids, progress))
     return CHOOSING
 
+
 # ── admin panel ───────────────────────────────────────────────────────────────
+
 
 async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if update.effective_user.id != ADMIN_ID:
         return
     await update.callback_query.answer()
-    kb = InlineKeyboardMarkup([
+    kb = InlineKeyboardMarkup(
         [
-            InlineKeyboardButton("📊 Statistika",       callback_data="adm_stats"),
-            InlineKeyboardButton("👥 Foydalanuvchilar", callback_data="adm_users_0"),
-        ],
-        [InlineKeyboardButton("⬇️ Yuklamalar", callback_data="adm_dl_0")],
-        [InlineKeyboardButton("📢 Broadcast", callback_data="adm_broadcast")],
-        [InlineKeyboardButton("◀️ Orqaga",    callback_data="adm_menu")],
-    ])
+            [
+                InlineKeyboardButton("📊 Statistika", callback_data="adm_stats"),
+                InlineKeyboardButton(
+                    "👥 Foydalanuvchilar", callback_data="adm_users_0"
+                ),
+            ],
+            [InlineKeyboardButton("⬇️ Yuklamalar", callback_data="adm_dl_0")],
+            [InlineKeyboardButton("📢 Broadcast", callback_data="adm_broadcast")],
+            [InlineKeyboardButton("◀️ Orqaga", callback_data="adm_menu")],
+        ]
+    )
     await update.callback_query.edit_message_text("🔐 Admin panel:", reply_markup=kb)
 
 
@@ -347,11 +407,17 @@ async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         f"  URL: {s['url_downloads']}\n\n"
         f"🔔 <b>Obunalar:</b> {s['total_subscriptions']}"
     )
-    kb = InlineKeyboardMarkup([[
-        InlineKeyboardButton("🔄 Yangilash", callback_data="adm_stats"),
-        InlineKeyboardButton("◀️ Orqaga",    callback_data="adm_panel"),
-    ]])
-    await update.callback_query.edit_message_text(text, reply_markup=kb, parse_mode="HTML")
+    kb = InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton("🔄 Yangilash", callback_data="adm_stats"),
+                InlineKeyboardButton("◀️ Orqaga", callback_data="adm_panel"),
+            ]
+        ]
+    )
+    await update.callback_query.edit_message_text(
+        text, reply_markup=kb, parse_mode="HTML"
+    )
 
 
 async def admin_users(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -373,16 +439,28 @@ async def admin_users(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             f"{i}. {u['full_name']} ({uname})\n"
             f"🆔 {u['user_id']} | 📅 {joined} | ⬇️ {u['download_count']} ta"
         )
-    text = f"👥 <b>Foydalanuvchilar</b> ({total} ta)\n\n" + ("\n\n".join(lines) or "Bo'sh")
+    text = f"👥 <b>Foydalanuvchilar</b> ({total} ta)\n\n" + (
+        "\n\n".join(lines) or "Bo'sh"
+    )
 
     nav = []
     if page > 0:
-        nav.append(InlineKeyboardButton("◀️ Prev", callback_data=f"adm_users_{page - 1}"))
-    nav.append(InlineKeyboardButton(f"{page + 1}/{total_pages}", callback_data="adm_noop"))
+        nav.append(
+            InlineKeyboardButton("◀️ Prev", callback_data=f"adm_users_{page - 1}")
+        )
+    nav.append(
+        InlineKeyboardButton(f"{page + 1}/{total_pages}", callback_data="adm_noop")
+    )
     if (page + 1) * per_page < total:
-        nav.append(InlineKeyboardButton("Next ▶️", callback_data=f"adm_users_{page + 1}"))
-    kb = InlineKeyboardMarkup([nav, [InlineKeyboardButton("◀️ Orqaga", callback_data="adm_panel")]])
-    await update.callback_query.edit_message_text(text, reply_markup=kb, parse_mode="HTML")
+        nav.append(
+            InlineKeyboardButton("Next ▶️", callback_data=f"adm_users_{page + 1}")
+        )
+    kb = InlineKeyboardMarkup(
+        [nav, [InlineKeyboardButton("◀️ Orqaga", callback_data="adm_panel")]]
+    )
+    await update.callback_query.edit_message_text(
+        text, reply_markup=kb, parse_mode="HTML"
+    )
 
 
 async def admin_downloads(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -406,14 +484,22 @@ async def admin_downloads(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     nav = []
     if page > 0:
         nav.append(InlineKeyboardButton("◀️ Prev", callback_data=f"adm_dl_{page - 1}"))
-    nav.append(InlineKeyboardButton(f"{page + 1}/{total_pages}", callback_data="adm_noop"))
+    nav.append(
+        InlineKeyboardButton(f"{page + 1}/{total_pages}", callback_data="adm_noop")
+    )
     if (page + 1) * per_page < total:
         nav.append(InlineKeyboardButton("Next ▶️", callback_data=f"adm_dl_{page + 1}"))
-    kb = InlineKeyboardMarkup([nav, [InlineKeyboardButton("◀️ Orqaga", callback_data="adm_panel")]])
-    await update.callback_query.edit_message_text(text, reply_markup=kb, parse_mode="HTML")
+    kb = InlineKeyboardMarkup(
+        [nav, [InlineKeyboardButton("◀️ Orqaga", callback_data="adm_panel")]]
+    )
+    await update.callback_query.edit_message_text(
+        text, reply_markup=kb, parse_mode="HTML"
+    )
 
 
-async def admin_broadcast_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def admin_broadcast_menu(
+    update: Update, context: ContextTypes.DEFAULT_TYPE
+) -> None:
     if update.effective_user.id != ADMIN_ID:
         return
     await update.callback_query.answer()
@@ -423,7 +509,9 @@ async def admin_broadcast_menu(update: Update, context: ContextTypes.DEFAULT_TYP
     )
 
 
-async def handle_admin_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def handle_admin_broadcast(
+    update: Update, context: ContextTypes.DEFAULT_TYPE
+) -> None:
     if not context.user_data.get("awaiting_broadcast"):
         return
     context.user_data.pop("awaiting_broadcast", None)
@@ -432,13 +520,15 @@ async def handle_admin_broadcast(update: Update, context: ContextTypes.DEFAULT_T
     context.bot_data["broadcast_msg_id"] = update.message.message_id
 
     broadcast_chat_id = context.bot_data["broadcast_msg_chat_id"]
-    broadcast_msg_id  = context.bot_data["broadcast_msg_id"]
+    broadcast_msg_id = context.bot_data["broadcast_msg_id"]
 
     user_ids = await database.get_all_user_ids()
     print(f"[BROADCAST] Total users: {len(user_ids)}, IDs: {user_ids}")
 
     sent, failed = 0, 0
-    progress_msg = await update.message.reply_text(f"📤 Yuborilmoqda: 0/{len(user_ids)}...")
+    progress_msg = await update.message.reply_text(
+        f"📤 Yuborilmoqda: 0/{len(user_ids)}..."
+    )
 
     for i, uid in enumerate(user_ids):
         try:
@@ -456,7 +546,9 @@ async def handle_admin_broadcast(update: Update, context: ContextTypes.DEFAULT_T
 
         if i % 10 == 0:
             try:
-                await progress_msg.edit_text(f"📤 Yuborilmoqda: {i + 1}/{len(user_ids)}...")
+                await progress_msg.edit_text(
+                    f"📤 Yuborilmoqda: {i + 1}/{len(user_ids)}..."
+                )
             except Exception:
                 pass
 
@@ -464,9 +556,13 @@ async def handle_admin_broadcast(update: Update, context: ContextTypes.DEFAULT_T
 
     await progress_msg.edit_text(f"✅ Yuborildi: {sent} | ❌ Xato: {failed}")
     user_id = update.effective_user.id
-    await update.effective_message.reply_text(t("send_prompt"), reply_markup=main_keyboard(user_id))
+    await update.effective_message.reply_text(
+        t("send_prompt"), reply_markup=main_keyboard(user_id)
+    )
+
 
 # ── lifecycle ─────────────────────────────────────────────────────────────────
+
 
 async def post_init(application: Application) -> None:
     await database.init_db()
@@ -480,7 +576,9 @@ async def post_stop(application: Application) -> None:
     await userbot_client.stop()
     log.info("Bot stopped")
 
+
 # ── main ──────────────────────────────────────────────────────────────────────
+
 
 def main() -> None:
     logging.basicConfig(level=logging.INFO)
@@ -503,10 +601,10 @@ def main() -> None:
             ],
         },
         fallbacks=[
-            CommandHandler("cancel",    cancel),
-            CommandHandler("start",     cmd_start),
-            CommandHandler("stats",     stats_cmd),
-            CommandHandler("users",     users_cmd),
+            CommandHandler("cancel", cancel),
+            CommandHandler("start", cmd_start),
+            CommandHandler("stats", stats_cmd),
+            CommandHandler("users", users_cmd),
             CommandHandler("broadcast", broadcast_cmd),
         ],
         allow_reentry=True,
@@ -522,13 +620,23 @@ def main() -> None:
     application.add_handler(conv)
 
     # admin panel — registered outside ConversationHandler
-    application.add_handler(CallbackQueryHandler(show_menu,            pattern="^adm_menu$"))
-    application.add_handler(CallbackQueryHandler(admin_panel,          pattern="^adm_panel$"))
-    application.add_handler(CallbackQueryHandler(admin_stats,          pattern="^adm_stats$"))
-    application.add_handler(CallbackQueryHandler(admin_users,          pattern=r"^adm_users_\d+$"))
-    application.add_handler(CallbackQueryHandler(admin_downloads,      pattern=r"^adm_dl_\d+$"))
-    application.add_handler(CallbackQueryHandler(admin_broadcast_menu, pattern="^adm_broadcast$"))
-    application.add_handler(CallbackQueryHandler(lambda u, c: u.callback_query.answer(), pattern="^adm_noop$"))
+    application.add_handler(CallbackQueryHandler(show_menu, pattern="^adm_menu$"))
+    application.add_handler(CallbackQueryHandler(admin_panel, pattern="^adm_panel$"))
+    application.add_handler(CallbackQueryHandler(admin_stats, pattern="^adm_stats$"))
+    application.add_handler(
+        CallbackQueryHandler(admin_users, pattern=r"^adm_users_\d+$")
+    )
+    application.add_handler(
+        CallbackQueryHandler(admin_downloads, pattern=r"^adm_dl_\d+$")
+    )
+    application.add_handler(
+        CallbackQueryHandler(admin_broadcast_menu, pattern="^adm_broadcast$")
+    )
+    application.add_handler(
+        CallbackQueryHandler(
+            lambda u, c: u.callback_query.answer(), pattern="^adm_noop$"
+        )
+    )
     application.add_handler(
         MessageHandler(filters.ALL & filters.User(ADMIN_ID), handle_admin_broadcast),
         group=1,

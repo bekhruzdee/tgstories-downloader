@@ -74,7 +74,9 @@ async def _download_story(story, username: str, story_id: int) -> "tuple | None"
 
     # Approach 1: pass the story object directly to download_media 1
     try:
-        path = await app.download_media(story, file_name=f"stories/{username}_{story_id}")
+        path = await app.download_media(
+            story, file_name=f"stories/{username}_{story_id}"
+        )
         if path:
             ext = os.path.splitext(path)[1].lower()
             media_type = "video" if ext in (".mp4", ".mov", ".avi", ".mkv") else "photo"
@@ -88,10 +90,14 @@ async def _download_story(story, username: str, story_id: int) -> "tuple | None"
     # Approach 2: pass story.media directly to download_media
     if raw_media is not None:
         try:
-            path = await app.download_media(raw_media, file_name=f"stories/{username}_{story_id}")
+            path = await app.download_media(
+                raw_media, file_name=f"stories/{username}_{story_id}"
+            )
             if path:
                 ext = os.path.splitext(path)[1].lower()
-                media_type = "video" if ext in (".mp4", ".mov", ".avi", ".mkv") else "photo"
+                media_type = (
+                    "video" if ext in (".mp4", ".mov", ".avi", ".mkv") else "photo"
+                )
                 print(f"[DEBUG] Approach 2 (story.media direct) succeeded: {path}")
                 return (media_type, path)
             print("[DEBUG] Approach 2 returned None path")
@@ -218,7 +224,9 @@ async def get_story_by_id(username: str, story_id: int) -> tuple:
     if result:
         return result
 
-    raise Exception(f"Bu storyda yuklab bo'ladigan media yo'q ({type(getattr(story, 'media', None)).__name__})!")
+    raise Exception(
+        f"Bu storyda yuklab bo'ladigan media yo'q ({type(getattr(story, 'media', None)).__name__})!"
+    )
 
 
 async def get_story_ids(username: str) -> list[int]:
@@ -239,23 +247,24 @@ import glob
 async def download_yt_or_insta(url: str) -> tuple:
     os.makedirs("downloads", exist_ok=True)
     opts = {
-        'outtmpl': 'downloads/%(id)s.%(ext)s',
-        'format': 'b',
-        'quiet': True,
-        'http_headers': {
-            'User-Agent': 'Mozilla/5.0 (Linux; Android 11; Pixel 5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.91 Mobile Safari/537.36',
+        "outtmpl": "downloads/%(id)s.%(ext)s",
+        "format": "b",
+        "quiet": True,
+        "http_headers": {
+            "User-Agent": "Mozilla/5.0 (Linux; Android 11; Pixel 5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.91 Mobile Safari/537.36",
         },
-        'cookiefile': '/root/tgstories-downloader/cookies.txt',
+        "cookiefile": "/root/tgstories-downloader/cookies.txt",
     }
+
     def _typed(path: str) -> tuple:
         ext = os.path.splitext(path)[1].lower()
-        media_type = "photo" if ext in ('.jpg', '.jpeg', '.png', '.webp') else "video"
+        media_type = "photo" if ext in (".jpg", ".jpeg", ".png", ".webp") else "video"
         return (media_type, path)
 
-    try:
+    def _run():
         with _yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(url, download=True)
-            video_id = info.get('id') or info.get('webpage_url_basename', 'video')
+            video_id = info.get("id") or "video"
             direct = ydl.prepare_filename(info)
             if os.path.exists(direct):
                 return _typed(direct)
@@ -266,32 +275,8 @@ async def download_yt_or_insta(url: str) -> tuple:
             if files:
                 return _typed(files[0])
             raise Exception("File not found after download")
-    except Exception as e:
-        error_msg = str(e).lower()
-        if any(x in error_msg for x in ["no video", "empty media", "no video formats"]):
-            try:
-                info_opts = {
-                    'quiet': True,
-                    'skip_download': True,
-                    'cookiefile': '/root/tgstories-downloader/cookies.txt',
-                }
-                with _yt_dlp.YoutubeDL(info_opts) as ydl2:
-                    info = ydl2.extract_info(url, download=False)
-                    thumbnails = info.get('thumbnails', [])
-                    thumb_url = None
-                    if thumbnails:
-                        thumb_url = thumbnails[-1].get('url')
-                    if not thumb_url:
-                        thumb_url = info.get('thumbnail')
-                    if thumb_url:
-                        r = requests.get(thumb_url, headers={
-                            'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15'
-                        }, timeout=30)
-                        path = f"downloads/insta_photo_{int(time.time())}.jpg"
-                        with open(path, 'wb') as f:
-                            f.write(r.content)
-                        if os.path.getsize(path) > 1000:
-                            return ("photo", path)
-            except Exception as e2:
-                print(f"[DEBUG] Photo fallback failed: {e2}")
-        raise Exception(f"Yuklab bo'lmadi: {e}")
+
+    import asyncio
+
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, _run)

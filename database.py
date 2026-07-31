@@ -56,21 +56,28 @@ async def init_db() -> None:
 
 async def save_user(user_id: int, username: str | None, full_name: str) -> None:
     pool = await _get_pool()
-    await pool.execute("""
+    await pool.execute(
+        """
         INSERT INTO users (user_id, username, full_name)
         VALUES ($1, $2, $3)
         ON CONFLICT (user_id) DO UPDATE SET
             username    = EXCLUDED.username,
             full_name   = EXCLUDED.full_name,
             last_active = NOW()
-    """, user_id, username, full_name)
+    """,
+        user_id,
+        username,
+        full_name,
+    )
 
 
 async def log_download(user_id: int, target: str, type: str) -> None:
     pool = await _get_pool()
     await pool.execute(
         "INSERT INTO downloads (user_id, target, type) VALUES ($1, $2, $3)",
-        user_id, target, type,
+        user_id,
+        target,
+        type,
     )
 
 
@@ -78,10 +85,14 @@ async def get_stats() -> dict:
     pool = await _get_pool()
     today = date.today()
     return {
-        "total_users":      await pool.fetchval("SELECT COUNT(*) FROM users"),
-        "today_users":      await pool.fetchval("SELECT COUNT(*) FROM users WHERE joined_at::date = $1", today),
-        "total_downloads":  await pool.fetchval("SELECT COUNT(*) FROM downloads"),
-        "today_downloads":  await pool.fetchval("SELECT COUNT(*) FROM downloads WHERE downloaded_at::date = $1", today),
+        "total_users": await pool.fetchval("SELECT COUNT(*) FROM users"),
+        "today_users": await pool.fetchval(
+            "SELECT COUNT(*) FROM users WHERE joined_at::date = $1", today
+        ),
+        "total_downloads": await pool.fetchval("SELECT COUNT(*) FROM downloads"),
+        "today_downloads": await pool.fetchval(
+            "SELECT COUNT(*) FROM downloads WHERE downloaded_at::date = $1", today
+        ),
     }
 
 
@@ -109,7 +120,8 @@ async def add_subscription(user_id: int, target_username: str) -> None:
     await pool.execute(
         "INSERT INTO subscriptions (user_id, target_username) VALUES ($1, $2) "
         "ON CONFLICT (user_id, target_username) DO NOTHING",
-        user_id, target_username.lower(),
+        user_id,
+        target_username.lower(),
     )
 
 
@@ -120,8 +132,7 @@ async def get_subscriptions(user_id: int) -> list[dict]:
         user_id,
     )
     return [
-        {"username": r[0], "last_story_ids": json.loads(r[1] or "[]")}
-        for r in rows
+        {"username": r[0], "last_story_ids": json.loads(r[1] or "[]")} for r in rows
     ]
 
 
@@ -129,7 +140,8 @@ async def remove_subscription(user_id: int, target_username: str) -> None:
     pool = await _get_pool()
     await pool.execute(
         "DELETE FROM subscriptions WHERE user_id = $1 AND target_username = $2",
-        user_id, target_username.lower(),
+        user_id,
+        target_username.lower(),
     )
 
 
@@ -155,25 +167,41 @@ async def update_subscription_ids(
     await pool.execute(
         "UPDATE subscriptions SET last_story_ids = $1 "
         "WHERE user_id = $2 AND target_username = $3",
-        json.dumps(story_ids), user_id, target_username.lower(),
+        json.dumps(story_ids),
+        user_id,
+        target_username.lower(),
     )
 
 
 async def get_stats_extended() -> dict:
     pool = await _get_pool()
-    today     = date.today()
-    week_ago  = today - timedelta(days=7)
+    today = date.today()
+    week_ago = today - timedelta(days=7)
     month_ago = today - timedelta(days=30)
     return {
-        "total_users":         await pool.fetchval("SELECT COUNT(*) FROM users"),
-        "today_users":         await pool.fetchval("SELECT COUNT(*) FROM users WHERE joined_at::date = $1", today),
-        "week_users":          await pool.fetchval("SELECT COUNT(*) FROM users WHERE joined_at::date >= $1", week_ago),
-        "month_users":         await pool.fetchval("SELECT COUNT(*) FROM users WHERE joined_at::date >= $1", month_ago),
-        "total_downloads":     await pool.fetchval("SELECT COUNT(*) FROM downloads"),
-        "today_downloads":     await pool.fetchval("SELECT COUNT(*) FROM downloads WHERE downloaded_at::date = $1", today),
-        "username_downloads":  await pool.fetchval("SELECT COUNT(*) FROM downloads WHERE type = 'username'"),
-        "url_downloads":       await pool.fetchval("SELECT COUNT(*) FROM downloads WHERE type = 'url'"),
-        "total_subscriptions": await pool.fetchval("SELECT COUNT(*) FROM subscriptions"),
+        "total_users": await pool.fetchval("SELECT COUNT(*) FROM users"),
+        "today_users": await pool.fetchval(
+            "SELECT COUNT(*) FROM users WHERE joined_at::date = $1", today
+        ),
+        "week_users": await pool.fetchval(
+            "SELECT COUNT(*) FROM users WHERE joined_at::date >= $1", week_ago
+        ),
+        "month_users": await pool.fetchval(
+            "SELECT COUNT(*) FROM users WHERE joined_at::date >= $1", month_ago
+        ),
+        "total_downloads": await pool.fetchval("SELECT COUNT(*) FROM downloads"),
+        "today_downloads": await pool.fetchval(
+            "SELECT COUNT(*) FROM downloads WHERE downloaded_at::date = $1", today
+        ),
+        "username_downloads": await pool.fetchval(
+            "SELECT COUNT(*) FROM downloads WHERE type = 'username'"
+        ),
+        "url_downloads": await pool.fetchval(
+            "SELECT COUNT(*) FROM downloads WHERE type = 'url'"
+        ),
+        "total_subscriptions": await pool.fetchval(
+            "SELECT COUNT(*) FROM subscriptions"
+        ),
     }
 
 
@@ -186,16 +214,23 @@ async def get_users_page(page: int, per_page: int = 10) -> list[dict]:
         "GROUP BY u.user_id, u.username, u.full_name, u.lang, u.joined_at "
         "ORDER BY u.joined_at DESC "
         "LIMIT $1 OFFSET $2",
-        per_page, page * per_page,
+        per_page,
+        page * per_page,
     )
     result = [
         {
-            "user_id": r[0], "username": r[1], "full_name": r[2],
-            "lang": r[3], "joined_at": r[4], "download_count": r[5],
+            "user_id": r[0],
+            "username": r[1],
+            "full_name": r[2],
+            "lang": r[3],
+            "joined_at": r[4],
+            "download_count": r[5],
         }
         for r in rows
     ]
-    print(f"[get_users_page] page={page}, per_page={per_page}, rows={len(result)}, data={result}")
+    print(
+        f"[get_users_page] page={page}, per_page={per_page}, rows={len(result)}, data={result}"
+    )
     return result
 
 
@@ -212,12 +247,17 @@ async def get_recent_downloads(page: int, per_page: int = 20) -> list[dict]:
         "FROM downloads d LEFT JOIN users u ON d.user_id = u.user_id "
         "ORDER BY d.downloaded_at DESC "
         "LIMIT $1 OFFSET $2",
-        per_page, page * per_page,
+        per_page,
+        page * per_page,
     )
     return [
         {
-            "user_id": r[0], "target": r[1], "type": r[2],
-            "downloaded_at": r[3], "full_name": r[4], "uname": r[5],
+            "user_id": r[0],
+            "target": r[1],
+            "type": r[2],
+            "downloaded_at": r[3],
+            "full_name": r[4],
+            "uname": r[5],
         }
         for r in rows
     ]
@@ -238,8 +278,11 @@ async def get_all_subscriptions_detailed() -> list[dict]:
     )
     return [
         {
-            "user_id": r[0], "target_username": r[1], "added_at": r[2],
-            "full_name": r[3], "uname": r[4],
+            "user_id": r[0],
+            "target_username": r[1],
+            "added_at": r[2],
+            "full_name": r[3],
+            "uname": r[4],
         }
         for r in rows
     ]
