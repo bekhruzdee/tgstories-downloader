@@ -239,42 +239,58 @@ async def get_story_ids(username: str) -> list[int]:
         return []
 
 
-import yt_dlp as _yt_dlp
+import asyncio
 import glob
 
-
-import asyncio
+import yt_dlp as _yt_dlp
 
 
 async def download_yt_or_insta(url: str) -> tuple:
     os.makedirs("downloads", exist_ok=True)
 
-    proc = await asyncio.create_subprocess_exec(
-        "yt-dlp",
-        url,
-        "-o",
-        "downloads/%(id)s.%(ext)s",
-        "--cookies",
-        "/root/tgstories-downloader/cookies.txt",
-        "--print",
-        "after_move:filepath",
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
-    stdout, stderr = await proc.communicate()
+    def _typed(path: str) -> tuple:
+        ext = os.path.splitext(path)[1].lower()
+        return ("photo" if ext in (".jpg", ".jpeg", ".png", ".webp") else "video", path)
 
-    if proc.returncode != 0:
-        raise Exception(stderr.decode().strip().split("\n")[-1])
-
-    path = stdout.decode().strip().split("\n")[-1]
-
-    if not path or not os.path.exists(path):
+    if "vkvideo.ru" in url or "vk.com" in url:
+        proc = await asyncio.create_subprocess_exec(
+            "yt-dlp", url,
+            "-o", "downloads/%(id)s.%(ext)s",
+            "--print", "after_move:filepath",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await proc.communicate()
+        if proc.returncode != 0:
+            raise Exception(stderr.decode().strip().split("\n")[-1])
+        path = stdout.decode().strip().split("\n")[-1]
+        if path and os.path.exists(path):
+            return _typed(path)
         files = sorted(glob.glob("downloads/*"), key=os.path.getmtime, reverse=True)
         if files:
-            path = files[0]
-        else:
+            return _typed(files[0])
+        raise Exception("File not found")
+
+    opts = {
+        "outtmpl": "downloads/%(id)s.%(ext)s",
+        "quiet": True,
+        "cookiefile": "/root/tgstories-downloader/cookies.txt",
+    }
+
+    def _run() -> tuple:
+        with _yt_dlp.YoutubeDL(opts) as ydl:
+            info = ydl.extract_info(url, download=True)
+            video_id = info.get("id") or "video"
+            direct = ydl.prepare_filename(info)
+            if os.path.exists(direct):
+                return _typed(direct)
+            files = glob.glob(f"downloads/{video_id}.*")
+            if files:
+                return _typed(files[0])
+            files = sorted(glob.glob("downloads/*"), key=os.path.getmtime, reverse=True)
+            if files:
+                return _typed(files[0])
             raise Exception("File not found")
 
-    ext = os.path.splitext(path)[1].lower()
-    media_type = "photo" if ext in (".jpg", ".jpeg", ".png", ".webp") else "video"
-    return (media_type, path)
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, _run)
