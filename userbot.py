@@ -258,20 +258,31 @@ async def download_yt_or_insta(url: str) -> tuple:
         media_type = "photo" if ext in (".jpg", ".jpeg", ".png", ".webp") else "video"
         return (media_type, path)
 
+    def _find_file(ydl, info) -> tuple:
+        video_id = info.get("id") or "video"
+        direct = ydl.prepare_filename(info)
+        if os.path.exists(direct):
+            return _typed(direct)
+        files = glob.glob(f"downloads/{video_id}.*")
+        if files:
+            return _typed(files[0])
+        files = sorted(glob.glob("downloads/*"), key=os.path.getmtime, reverse=True)
+        if files:
+            return _typed(files[0])
+        raise Exception("File not found after download")
+
     def _run():
-        with _yt_dlp.YoutubeDL(opts) as ydl:
-            info = ydl.extract_info(url, download=True)
-            video_id = info.get("id") or "video"
-            direct = ydl.prepare_filename(info)
-            if os.path.exists(direct):
-                return _typed(direct)
-            files = glob.glob(f"downloads/{video_id}.*")
-            if files:
-                return _typed(files[0])
-            files = sorted(glob.glob("downloads/*"), key=os.path.getmtime, reverse=True)
-            if files:
-                return _typed(files[0])
-            raise Exception("File not found after download")
+        try:
+            with _yt_dlp.YoutubeDL(opts) as ydl:
+                info = ydl.extract_info(url, download=True)
+                return _find_file(ydl, info)
+        except Exception as e:
+            if "params" in str(e).lower():
+                min_opts = {"outtmpl": "downloads/%(id)s.%(ext)s"}
+                with _yt_dlp.YoutubeDL(min_opts) as ydl2:
+                    info = ydl2.extract_info(url, download=True)
+                    return _find_file(ydl2, info)
+            raise
 
     import asyncio
 
