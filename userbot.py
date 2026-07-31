@@ -243,48 +243,36 @@ import yt_dlp as _yt_dlp
 import glob
 
 
+import asyncio
+
+
 async def download_yt_or_insta(url: str) -> tuple:
     os.makedirs("downloads", exist_ok=True)
-    opts = {
-        "outtmpl": "downloads/%(id)s.%(ext)s",
-        "quiet": True,
-        "http_headers": {
-            "User-Agent": "Mozilla/5.0 (Linux; Android 11; Pixel 5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.91 Mobile Safari/537.36",
-        },
-    }
 
-    def _typed(path: str) -> tuple:
-        ext = os.path.splitext(path)[1].lower()
-        media_type = "photo" if ext in (".jpg", ".jpeg", ".png", ".webp") else "video"
-        return (media_type, path)
+    proc = await asyncio.create_subprocess_exec(
+        "yt-dlp",
+        url,
+        "-o",
+        "downloads/%(id)s.%(ext)s",
+        "--print",
+        "after_move:filepath",
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    stdout, stderr = await proc.communicate()
 
-    def _find_file(ydl, info) -> tuple:
-        video_id = info.get("id") or "video"
-        direct = ydl.prepare_filename(info)
-        if os.path.exists(direct):
-            return _typed(direct)
-        files = glob.glob(f"downloads/{video_id}.*")
-        if files:
-            return _typed(files[0])
+    if proc.returncode != 0:
+        raise Exception(stderr.decode().strip().split("\n")[-1])
+
+    path = stdout.decode().strip().split("\n")[-1]
+
+    if not path or not os.path.exists(path):
         files = sorted(glob.glob("downloads/*"), key=os.path.getmtime, reverse=True)
         if files:
-            return _typed(files[0])
-        raise Exception("File not found after download")
+            path = files[0]
+        else:
+            raise Exception("File not found")
 
-    def _run():
-        try:
-            with _yt_dlp.YoutubeDL(opts) as ydl:
-                info = ydl.extract_info(url, download=True)
-                return _find_file(ydl, info)
-        except Exception as e:
-            if "params" in str(e).lower():
-                min_opts = {"outtmpl": "downloads/%(id)s.%(ext)s"}
-                with _yt_dlp.YoutubeDL(min_opts) as ydl2:
-                    info = ydl2.extract_info(url, download=True)
-                    return _find_file(ydl2, info)
-            raise
-
-    import asyncio
-
-    loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(None, _run)
+    ext = os.path.splitext(path)[1].lower()
+    media_type = "photo" if ext in (".jpg", ".jpeg", ".png", ".webp") else "video"
+    return (media_type, path)
