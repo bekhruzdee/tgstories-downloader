@@ -196,7 +196,7 @@ async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
     text = update.message.text
     print(f"[DEBUG] Received text: {text}")
-    if "instagram.com" in text:
+    if any(x in text for x in ["instagram.com", "twitter.com", "x.com", "facebook.com", "fb.watch", "vk.com", "vkvideo.ru"]):
         return await handle_yt_insta(update, context)
     print(f"[DEBUG] Contains t.me: {'t.me/' in text}")
     if "t.me/" in text:
