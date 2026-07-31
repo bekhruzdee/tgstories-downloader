@@ -240,7 +240,7 @@ async def download_yt_or_insta(url: str) -> tuple:
     os.makedirs("downloads", exist_ok=True)
     opts = {
         'outtmpl': 'downloads/%(id)s.%(ext)s',
-        'format': 'best',
+        'format': 'b',
         'quiet': True,
         'extractor_args': {
             'youtube': {'player_client': ['android']},
