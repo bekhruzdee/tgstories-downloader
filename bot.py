@@ -614,6 +614,12 @@ def main() -> None:
     application = (
         Application.builder()
         .token(BOT_TOKEN)
+        .connect_timeout(30)
+        .read_timeout(30)
+        .write_timeout(30)
+        .pool_timeout(30)
+        .get_updates_connect_timeout(30)
+        .get_updates_read_timeout(30)
         .post_init(post_init)
         .post_stop(post_stop)
         .build()
