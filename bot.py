@@ -209,6 +209,8 @@ async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
 
 async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    user = update.effective_user
+    await database.save_user(user.id, user.username, user.full_name)
     if context.user_data.get("awaiting_broadcast"):
         return CHOOSING
 
@@ -585,7 +587,10 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO)
 
     conv = ConversationHandler(
-        entry_points=[CommandHandler("start", cmd_start)],
+        entry_points=[
+            CommandHandler("start", cmd_start),
+            MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_input),
+        ],
         states={
             CHOOSING: [
                 CommandHandler("start", cmd_start),
