@@ -229,18 +229,13 @@ async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
     text = update.message.text
     print(f"[DEBUG] Received text: {text}")
-    if any(
-        x in text
-        for x in [
-            "instagram.com",
-            "twitter.com",
-            "x.com",
-            "facebook.com",
-            "fb.watch",
-            "vk.com",
-            "vkvideo.ru",
-        ]
-    ):
+    text_l = text.strip().lower()
+    is_link = text_l.startswith(("http://", "https://", "www.")) or "://" in text_l
+    if is_link and "instagram.com" not in text_l and "t.me/" not in text_l:
+        await update.message.reply_text(t("bad_link"))
+        await update.message.reply_text(t("send_prompt"), reply_markup=main_keyboard(user.id))
+        return CHOOSING
+    if "instagram.com" in text:
         return await handle_yt_insta(update, context)
     print(f"[DEBUG] Contains t.me: {'t.me/' in text}")
     if "t.me/" in text:

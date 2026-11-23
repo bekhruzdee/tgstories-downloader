@@ -252,28 +252,6 @@ async def download_yt_or_insta(url: str) -> tuple:
         ext = os.path.splitext(path)[1].lower()
         return ("photo" if ext in (".jpg", ".jpeg", ".png", ".webp") else "video", path)
 
-    if "vkvideo.ru" in url or "vk.com" in url:
-        proc = await asyncio.create_subprocess_exec(
-            "yt-dlp",
-            url,
-            "-o",
-            "downloads/%(id)s.%(ext)s",
-            "--print",
-            "after_move:filepath",
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        stdout, stderr = await proc.communicate()
-        if proc.returncode != 0:
-            raise Exception(stderr.decode().strip().split("\n")[-1])
-        path = stdout.decode().strip().split("\n")[-1]
-        if path and os.path.exists(path):
-            return _typed(path)
-        files = sorted(glob.glob("downloads/*"), key=os.path.getmtime, reverse=True)
-        if files:
-            return _typed(files[0])
-        raise Exception("File not found")
-
     opts = {
         "outtmpl": "downloads/%(id)s.%(ext)s",
         "quiet": True,

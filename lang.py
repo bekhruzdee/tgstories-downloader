@@ -1,19 +1,14 @@
 TEXTS: dict = {
     "welcome": (
         "🎬 *Tg Stories Downloader*\n\n"
-        "Download content from multiple platforms!\n\n"
         "📌 *How to use:*\n"
         "• *Username* — Telegram stories (last 24 hours)\n"
         "• *Telegram URL* — one specific story\n"
-        "• *Instagram* — reels and videos\n"
-        "• *Twitter/X* — tweets with video\n"
-        "• *Facebook* — public videos\n"
-        "• *VK* — videos\n\n"
+        "• *Instagram* — reels and videos\n\n"
         "💡 *Examples:*\n"
         "`@durov`\n"
         "`https://t.me/durov/s/123`\n"
-        "`https://www.instagram.com/reel/xxx`\n"
-        "`https://x.com/user/status/xxx`\n\n"
+        "`https://www.instagram.com/reel/xxx`\n\n"
         "⚠️ Only public content works!"
     ),
     "downloading": "⏳ Downloading stories...",
@@ -27,6 +22,7 @@ TEXTS: dict = {
     "back": "⬅️ Back",
     "try_again": "Try again:",
     "bad_url": "❌ Invalid URL format!\n\nExample: https://t.me/durov/s/123",
+    "bad_link": "❌ Unsupported link format. Please send a Telegram @username, a Telegram story link (t.me/.../s/...) or an Instagram link.",
     "send_prompt": "👤 Send username or 🔗 Story URL",
 }
 
