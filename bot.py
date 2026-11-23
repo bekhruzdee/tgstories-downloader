@@ -254,14 +254,18 @@ async def handle_yt_insta(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     user = update.effective_user
     url = update.message.text.strip()
     msg = await update.message.reply_text("⏳ Downloading...")
+    t0 = time.time()
     try:
         media_type, path = await download_yt_or_insta(url)
+        log.warning("IG download took %.1fs", time.time() - t0)
         await msg.edit_text("📤 Sending...")
+        t1 = time.time()
         with open(path, "rb") as f:
             if media_type == "video":
                 await update.message.reply_video(video=f, caption=f"🎬 {url[:50]}")
             else:
                 await update.message.reply_photo(photo=f, caption=f"🖼 {url[:50]}")
+        log.warning("IG send took %.1fs", time.time() - t1)
         os.remove(path)
     except Exception as e:
         error_msg = str(e).lower()
