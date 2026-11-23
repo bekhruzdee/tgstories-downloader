@@ -585,6 +585,8 @@ async def post_stop(application: Application) -> None:
 
 def main() -> None:
     logging.basicConfig(level=logging.INFO)
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
 
     conv = ConversationHandler(
         entry_points=[
