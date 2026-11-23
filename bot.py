@@ -251,7 +251,7 @@ async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 async def handle_yt_insta(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     user = update.effective_user
     url = update.message.text.strip()
-    msg = await update.message.reply_text("⏳ Downloading...")
+    msg = await update.message.reply_text("⏳ Downloading... this can take up to a minute.")
     t0 = time.time()
     try:
         media_type, path = await download_yt_or_insta(url)
@@ -266,17 +266,17 @@ async def handle_yt_insta(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         log.warning("IG send took %.1fs", time.time() - t1)
         os.remove(path)
     except Exception as e:
+        log.warning("IG error: %s", e)
         error_msg = str(e).lower()
-        if any(
-            x in error_msg
-            for x in ["no video", "no video formats", "empty media", "photo"]
-        ):
+        if any(x in error_msg for x in ["no video", "no video formats", "empty media", "photo"]):
             await msg.edit_text(
                 "📸 Instagram photos cannot be downloaded.\n"
                 "✅ Only Instagram videos and reels work!"
             )
+        elif any(x in error_msg for x in ["login", "private", "unavailable"]):
+            await msg.edit_text("❌ This post is private or unavailable.")
         else:
-            await msg.edit_text(f"❌ {e}")
+            await msg.edit_text("❌ Could not download this link. Please try again later.")
     await update.message.reply_text(
         t("send_prompt"), reply_markup=main_keyboard(user.id)
     )
