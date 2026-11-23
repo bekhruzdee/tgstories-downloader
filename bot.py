@@ -59,6 +59,8 @@ async def _send_or_edit(update: Update, text: str, keyboard=None) -> None:
 
 
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    context.user_data.pop("awaiting_broadcast", None)
+    context.user_data.pop("pending_broadcast", None)
     user = update.effective_user
     await database.save_user(user.id, user.username, user.full_name)
     await update.message.reply_text(t("welcome"), parse_mode="Markdown")
@@ -212,6 +214,7 @@ async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     user = update.effective_user
     await database.save_user(user.id, user.username, user.full_name)
     if context.user_data.get("awaiting_broadcast"):
+        await handle_admin_broadcast(update, context)
         return CHOOSING
 
     user_id = update.effective_user.id
@@ -284,6 +287,8 @@ async def handle_yt_insta(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    context.user_data.pop("awaiting_broadcast", None)
+    context.user_data.pop("pending_broadcast", None)
     user_id = update.effective_user.id
     await update.message.reply_text(t("cancelled"))
     await update.message.reply_text(
@@ -507,28 +512,19 @@ async def admin_broadcast_menu(
     await update.callback_query.answer()
     context.user_data["awaiting_broadcast"] = True
     await update.callback_query.edit_message_text(
-        "Xabar yuboring (matn, rasm, video, ovozli xabar — hammasi qabul qilinadi):"
+        "Xabar yuboring (matn, rasm, video, ovozli xabar — hammasi qabul qilinadi):",
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("❌ Cancel", callback_data="adm_bc_cancel")]]),
     )
 
 
-async def handle_admin_broadcast(
-    update: Update, context: ContextTypes.DEFAULT_TYPE
+async def run_broadcast(
+    update: Update, context: ContextTypes.DEFAULT_TYPE, chat_id: int, message_id: int
 ) -> None:
-    if not context.user_data.get("awaiting_broadcast"):
-        return
-    context.user_data.pop("awaiting_broadcast", None)
-
-    context.bot_data["broadcast_msg_chat_id"] = update.message.chat.id
-    context.bot_data["broadcast_msg_id"] = update.message.message_id
-
-    broadcast_chat_id = context.bot_data["broadcast_msg_chat_id"]
-    broadcast_msg_id = context.bot_data["broadcast_msg_id"]
-
     user_ids = await database.get_all_user_ids()
     print(f"[BROADCAST] Total users: {len(user_ids)}, IDs: {user_ids}")
 
     sent, failed = 0, 0
-    progress_msg = await update.message.reply_text(
+    progress_msg = await update.effective_message.reply_text(
         f"📤 Yuborilmoqda: 0/{len(user_ids)}..."
     )
 
@@ -537,8 +533,8 @@ async def handle_admin_broadcast(
             uid = int(uid)
             await context.bot.copy_message(
                 chat_id=uid,
-                from_chat_id=broadcast_chat_id,
-                message_id=broadcast_msg_id,
+                from_chat_id=chat_id,
+                message_id=message_id,
             )
             sent += 1
             print(f"[BROADCAST] Sent to {uid}")
@@ -557,10 +553,49 @@ async def handle_admin_broadcast(
         await asyncio.sleep(0.05)
 
     await progress_msg.edit_text(f"✅ Yuborildi: {sent} | ❌ Xato: {failed}")
-    user_id = update.effective_user.id
     await update.effective_message.reply_text(
-        t("send_prompt"), reply_markup=main_keyboard(user_id)
+        t("send_prompt"), reply_markup=main_keyboard(update.effective_user.id)
     )
+
+
+async def handle_admin_broadcast(
+    update: Update, context: ContextTypes.DEFAULT_TYPE
+) -> None:
+    if not context.user_data.get("awaiting_broadcast"):
+        return
+    context.user_data.pop("awaiting_broadcast", None)
+    context.user_data["pending_broadcast"] = (update.message.chat.id, update.message.message_id)
+    kb = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("✅ Send", callback_data="adm_bc_send"),
+            InlineKeyboardButton("❌ Cancel", callback_data="adm_bc_cancel"),
+        ]
+    ])
+    await update.message.reply_text("Send this message to all users?", reply_markup=kb)
+
+
+async def adm_bc_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if update.effective_user.id != ADMIN_ID:
+        return
+    context.user_data.pop("awaiting_broadcast", None)
+    context.user_data.pop("pending_broadcast", None)
+    await update.callback_query.answer()
+    await update.callback_query.edit_message_text("Broadcast cancelled.")
+    await update.effective_message.reply_text(
+        t("send_prompt"), reply_markup=main_keyboard(update.effective_user.id)
+    )
+
+
+async def adm_bc_send(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if update.effective_user.id != ADMIN_ID:
+        return
+    pending = context.user_data.pop("pending_broadcast", None)
+    if not pending:
+        await update.callback_query.answer("No pending broadcast.")
+        return
+    chat_id, message_id = pending
+    await update.callback_query.answer()
+    await run_broadcast(update, context, chat_id, message_id)
 
 
 # ── lifecycle ─────────────────────────────────────────────────────────────────
@@ -645,6 +680,8 @@ def main() -> None:
     application.add_handler(
         CallbackQueryHandler(admin_broadcast_menu, pattern="^adm_broadcast$")
     )
+    application.add_handler(CallbackQueryHandler(adm_bc_cancel, pattern="^adm_bc_cancel$"))
+    application.add_handler(CallbackQueryHandler(adm_bc_send, pattern="^adm_bc_send$"))
     application.add_handler(
         CallbackQueryHandler(
             lambda u, c: u.callback_query.answer(), pattern="^adm_noop$"
