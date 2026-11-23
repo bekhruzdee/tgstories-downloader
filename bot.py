@@ -29,7 +29,7 @@ from userbot import (
 
 log = logging.getLogger(__name__)
 
-CHOOSING, WAITING_USERNAME, WAITING_URL = range(3)
+CHOOSING = 0
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -82,12 +82,6 @@ async def show_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
 
 # ── download by username ──────────────────────────────────────────────────────
-
-
-async def ask_for_username(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    await update.callback_query.answer()
-    await update.callback_query.edit_message_text(t("enter_username"))
-    return WAITING_USERNAME
 
 
 async def handle_username(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -150,18 +144,10 @@ async def handle_username(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 # ── download by URL ───────────────────────────────────────────────────────────
 
 
-async def ask_for_url(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    await update.callback_query.answer()
-    await update.callback_query.edit_message_text(t("enter_url"))
-    return WAITING_URL
-
-
 async def handle_url(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     user = update.effective_user
     url = update.message.text
-    print(f"[DEBUG] handle_url called with: {url}")
     username, story_id = parse_story_url(url)
-    print(f"[DEBUG] Parsed username={username}, story_id={story_id}")
 
     if not username or not story_id:
         await update.message.reply_text(t("bad_url"))
@@ -231,7 +217,6 @@ async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     rate[user_id] = timestamps
 
     text = update.message.text
-    print(f"[DEBUG] Received text: {text}")
     text_l = text.strip().lower()
     is_link = text_l.startswith(("http://", "https://", "www.")) or "://" in text_l
     if is_link and "instagram.com" not in text_l and "t.me/" not in text_l:
@@ -240,11 +225,8 @@ async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         return CHOOSING
     if "instagram.com" in text:
         return await handle_yt_insta(update, context)
-    print(f"[DEBUG] Contains t.me: {'t.me/' in text}")
     if "t.me/" in text:
-        print(f"[DEBUG] URL detected: {text}")
         return await handle_url(update, context)
-    print(f"[DEBUG] Username detected: {text}")
     return await handle_username(update, context)
 
 
@@ -437,7 +419,7 @@ async def admin_users(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     total = await database.get_users_count()
     total_pages = max(1, (total + per_page - 1) // per_page)
 
-    print(f"[admin_users] page={page}, users count={len(users)}, total={total}")
+    log.info("admin_users page=%d, count=%d, total=%d", page, len(users), total)
     lines = []
     for i, u in enumerate(users, page * per_page + 1):
         uname = f"@{u['username']}" if u["username"] else "—"
@@ -521,7 +503,7 @@ async def run_broadcast(
     update: Update, context: ContextTypes.DEFAULT_TYPE, chat_id: int, message_id: int
 ) -> None:
     user_ids = await database.get_all_user_ids()
-    print(f"[BROADCAST] Total users: {len(user_ids)}, IDs: {user_ids}")
+    log.info("Broadcast starting: %d users", len(user_ids))
 
     sent, failed = 0, 0
     progress_msg = await update.effective_message.reply_text(
@@ -537,10 +519,9 @@ async def run_broadcast(
                 message_id=message_id,
             )
             sent += 1
-            print(f"[BROADCAST] Sent to {uid}")
         except Exception as e:
             failed += 1
-            print(f"[BROADCAST] Failed {uid}: {e}")
+            log.warning("Broadcast failed uid=%s: %s", uid, e)
 
         if i % 10 == 0:
             try:
@@ -633,14 +614,6 @@ def main() -> None:
                 CallbackQueryHandler(show_menu, pattern="^back_menu$"),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_input),
             ],
-            WAITING_USERNAME: [
-                CommandHandler("start", cmd_start),
-                MessageHandler(filters.TEXT & ~filters.COMMAND, handle_username),
-            ],
-            WAITING_URL: [
-                CommandHandler("start", cmd_start),
-                MessageHandler(filters.TEXT & ~filters.COMMAND, handle_url),
-            ],
         },
         fallbacks=[
             CommandHandler("cancel", cancel),
@@ -687,12 +660,7 @@ def main() -> None:
             lambda u, c: u.callback_query.answer(), pattern="^adm_noop$"
         )
     )
-    application.add_handler(
-        MessageHandler(filters.ALL & filters.User(ADMIN_ID), handle_admin_broadcast),
-        group=1,
-    )
-
-    print("Bot ishga tushdi!")
+    log.info("Bot ishga tushdi!")
     application.run_polling()
 
 

@@ -19,8 +19,6 @@ TEXTS: dict = {
     "cancelled": "❌ Cancelled.",
     "private": "🔒 This profile is private!",
     "not_found": "❌ Username not found!",
-    "back": "⬅️ Back",
-    "try_again": "Try again:",
     "bad_url": "❌ Invalid URL format!\n\nExample: https://t.me/durov/s/123",
     "bad_link": "❌ Unsupported link format. Please send a Telegram @username, a Telegram story link (t.me/.../s/...) or an Instagram link.",
     "send_prompt": "👤 Send username or 🔗 Story URL",
